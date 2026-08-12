@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Cloak cria salas privadas de voz no navegador, sem cadastro e sem instalar nada."
+    >
+    <meta name="theme-color" content="#090b12">
+    <meta name="color-scheme" content="dark">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    >
+    <title>Cloak — Salas de voz privadas</title>
+    <link rel="stylesheet" href="styles.css">
+    <script
+      defer
+      src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"
+      integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
+      crossorigin="anonymous"
+    ></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <div class="app-shell">
+      <header class="site-header">
+        <a
+          class="brand"
+          href="./"
+          id="brand-link"
+          aria-label="Cloak, página inicial"
+        >
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <span>Cloak</span>
+        </a>
+        <p class="privacy-status">
+          <span class="privacy-dot" aria-hidden="true"></span>
+          O Cloak não grava seu áudio
+        </p>
+      </header>
+
+      <main>
+        <section
+          class="screen home-screen"
+          id="home-screen"
+          aria-labelledby="home-title"
+        >
+          <div class="home-grid">
+            <div class="hero-copy">
+              <p class="eyebrow">
+                <span aria-hidden="true">✦</span> Voz direta. Presença real.
+              </p>
+              <h1 id="home-title" tabindex="-1">
+                Sua conversa,<br>
+                <span>sem ruído.</span>
+              </h1>
+              <p class="hero-description">
+                Crie uma sala de voz em segundos, compartilhe o código e
+                converse direto do navegador. Sem cadastro, sem downloads.
+              </p>
+
+              <ul class="trust-list" aria-label="Vantagens do Cloak">
+                <li>
+                  <span aria-hidden="true">01</span> Acesso por código privado
+                </li>
+                <li>
+                  <span aria-hidden="true">02</span> Áudio direto entre
+                  participantes
+                </li>
+                <li>
+                  <span aria-hidden="true">03</span> Até 6 pessoas por sala
+                </li>
+              </ul>
+
+              <div class="voice-visual" aria-hidden="true">
+                <div class="voice-orbit orbit-large"></div>
+                <div class="voice-orbit orbit-small"></div>
+                <div class="voice-core">
+                  <span></span><span></span><span></span><span></span
+                  ><span></span>
+                </div>
+                <div class="mini-person mini-person-one"><i>AM</i><b></b></div>
+                <div class="mini-person mini-person-two"><i>RL</i><b></b></div>
+                <div class="mini-person mini-person-three">
+                  <i>VC</i><b></b>
+                </div>
+              </div>
+            </div>
+
+            <div class="entry-card panel">
+              <div class="card-heading">
+                <span class="status-chip"
+                  ><i aria-hidden="true"></i> Pronto para conversar</span
+                >
+                <h2>Entre do seu jeito</h2>
+                <p>Escolha um nome para aparecer na sala.</p>
+              </div>
+
+              <form id="home-form" novalidate>
+                <div class="field-group">
+                  <label for="display-name">Seu nome</label>
+                  <div class="input-wrap">
+                    <input
+                      id="display-name"
+                      name="displayName"
+                      type="text"
+                      minlength="2"
+                      maxlength="24"
+                      autocomplete="name"
+                      placeholder="Como devemos chamar você?"
+                      aria-describedby="name-hint name-error"
+                      required
+                    >
+                    <span
+                      class="input-counter"
+                      id="name-counter"
+                      aria-hidden="true"
+                      >0/24</span
+                    >
+                  </div>
+                  <p class="field-hint" id="name-hint">
+                    Entre 2 e 24 caracteres.
+                  </p>
+                  <p class="field-error" id="name-error" role="alert"></p>
+                </div>
+
+                <button
+                  class="button button-primary button-large"
+                  type="button"
+                  id="create-room-button"
+                >
+                  <span>Criar uma nova sala</span>
+                  <span class="button-arrow" aria-hidden="true">↗</span>
+                </button>
+
+                <div class="separator">
+                  <span>ou entre com um convite</span>
+                </div>
+
+                <div class="field-group">
+                  <label for="room-code">Código da sala</label>
+                  <div class="join-row">
+                    <input
+                      class="code-input"
+                      id="room-code"
+                      name="roomCode"
+                      type="text"
+                      maxlength="512"
+                      autocomplete="off"
+                      autocapitalize="characters"
+                      spellcheck="false"
+                      inputmode="text"
+                      placeholder="ABCD-EFGH-JKLM"
+                      aria-describedby="code-hint code-error"
+                    >
+                    <button
+                      class="button button-secondary"
+                      type="submit"
+                      id="join-room-button"
+                    >
+                      Entrar
+                    </button>
+                  </div>
+                  <p class="field-hint" id="code-hint">
+                    Cole o código recebido de quem criou a sala.
+                  </p>
+                  <p class="field-error" id="code-error" role="alert"></p>
+                </div>
+
+                <div class="invite-arrival" id="invite-arrival" hidden>
+                  <span aria-hidden="true">✓</span>
+                  <p>
+                    <strong>Convite reconhecido.</strong> Digite seu nome para
+                    continuar.
+                  </p>
+                </div>
+              </form>
+
+              <p class="permission-footnote">
+                O navegador só pedirá acesso ao microfone depois que você
+                continuar.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="screen permission-screen"
+          id="permission-screen"
+          aria-labelledby="permission-title"
+          hidden
+        >
+          <button
+            class="text-button back-button"
+            type="button"
+            id="permission-back-button"
+          >
+            <span aria-hidden="true">←</span> Voltar
+          </button>
+
+          <div class="permission-layout">
+            <div class="permission-card panel">
+              <div class="microphone-illustration" aria-hidden="true">
+                <div class="mic-capsule"></div>
+                <div class="mic-stem"></div>
+                <span class="mic-ring ring-one"></span>
+                <span class="mic-ring ring-two"></span>
+              </div>
+
+              <p class="eyebrow" id="permission-eyebrow">Só falta uma etapa</p>
+              <h1 id="permission-title" tabindex="-1">Prepare seu microfone</h1>
+              <p class="permission-description">
+                O Cloak precisa da sua autorização para que as outras pessoas
+                possam ouvir você. Você poderá se silenciar a qualquer momento.
+              </p>
+
+              <div
+                class="room-preview"
+                role="group"
+                aria-label="Resumo da entrada"
+              >
+                <div>
+                  <span id="pending-action-label">Nova sala</span>
+                  <strong id="pending-room-code">—</strong>
+                </div>
+                <div>
+                  <span>Você entrará como</span>
+                  <strong id="pending-display-name">—</strong>
+                </div>
+              </div>
+
+              <div id="permission-initial">
+                <button
+                  class="button button-primary button-large"
+                  type="button"
+                  id="allow-microphone-button"
+                >
+                  <span
+                    class="control-symbol mic-symbol"
+                    aria-hidden="true"
+                  ></span>
+                  Permitir microfone
+                </button>
+                <button
+                  class="button button-quiet"
+                  type="button"
+                  id="listen-only-button"
+                >
+                  Entrar apenas para ouvir
+                </button>
+              </div>
+
+              <div class="microphone-ready" id="microphone-ready" hidden>
+                <div class="meter-row">
+                  <div class="device-status">
+                    <span class="device-check" aria-hidden="true">✓</span>
+                    <div>
+                      <strong>Microfone detectado</strong>
+                      <span id="microphone-label">Pronto para usar</span>
+                    </div>
+                  </div>
+                  <div
+                    class="volume-meter"
+                    id="volume-meter"
+                    role="meter"
+                    aria-label="Nível do microfone"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                  >
+                    <span id="volume-meter-fill"></span>
+                  </div>
+                </div>
+                <button
+                  class="button button-primary button-large"
+                  type="button"
+                  id="enter-room-button"
+                >
+                  Entrar na sala
+                  <span class="button-arrow" aria-hidden="true">↗</span>
+                </button>
+              </div>
+
+              <p
+                class="permission-error"
+                id="permission-error"
+                role="alert"
+              ></p>
+              <p class="secure-note">
+                <span aria-hidden="true">◇</span> Permissão protegida pelo
+                navegador
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="screen room-screen"
+          id="room-screen"
+          aria-labelledby="room-title"
+          hidden
+        >
+          <div class="room-shell">
+            <header class="room-header">
+              <div>
+                <p class="room-kicker">Sala de voz</p>
+                <div class="room-title-row">
+                  <h1 id="room-title" tabindex="-1">Cloak room</h1>
+                  <button
+                    class="room-code-pill"
+                    type="button"
+                    id="copy-code-button"
+                    aria-label="Copiar código da sala"
+                  >
+                    <span id="room-code-display">—</span>
+                    <span aria-hidden="true">⧉</span>
+                  </button>
+                </div>
+              </div>
+              <div
+                class="connection-status"
+                id="connection-status"
+                data-status="connecting"
+                role="status"
+              >
+                <span aria-hidden="true"></span>
+                <strong id="connection-status-text">Conectando…</strong>
+              </div>
+            </header>
+
+            <div class="room-layout">
+              <section
+                class="participants-panel"
+                aria-labelledby="participants-title"
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Agora na sala</p>
+                    <h2 id="participants-title">
+                      Participantes <span id="participant-count">0</span>
+                    </h2>
+                  </div>
+                  <p class="capacity-label">
+                    <span id="capacity-count">0</span>/6 lugares
+                  </p>
+                </div>
+
+                <div class="participants-grid" id="participants-grid"></div>
+
+                <div class="waiting-card" id="waiting-card" hidden>
+                  <div class="waiting-pulse" aria-hidden="true">
+                    <span></span>
+                  </div>
+                  <div>
+                    <strong>Esperando companhia</strong>
+                    <p>
+                      Compartilhe o convite para trazer outras pessoas à
+                      conversa.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="room-sidebar" aria-label="Convite e privacidade">
+                <div class="invite-card panel">
+                  <p class="eyebrow">Convide alguém</p>
+                  <h2>Esta conversa fica melhor acompanhada.</h2>
+                  <p>
+                    Quem tiver o código poderá entrar enquanto a sala estiver
+                    aberta.
+                  </p>
+
+                  <button
+                    class="invite-code"
+                    type="button"
+                    id="sidebar-code-button"
+                  >
+                    <span id="sidebar-room-code">—</span>
+                    <small>Copiar código</small>
+                  </button>
+
+                  <button
+                    class="button button-primary"
+                    type="button"
+                    id="sidebar-invite-button"
+                  >
+                    Copiar link do convite <span aria-hidden="true">↗</span>
+                  </button>
+                </div>
+
+                <div class="privacy-card">
+                  <span class="privacy-card-mark" aria-hidden="true">◇</span>
+                  <div>
+                    <strong>Conversa efêmera</strong>
+                    <p>
+                      O Cloak não grava o áudio. Quando quem criou sair, a sala se
+                      encerra.
+                    </p>
+                  </div>
+                </div>
+              </aside>
+            </div>
+
+            <nav class="room-controls" aria-label="Controles da sala">
+              <button class="control-button" type="button" id="mute-button">
+                <span class="control-icon"
+                  ><i class="control-symbol mic-symbol" aria-hidden="true"></i
+                ></span>
+                <span id="mute-button-label">Silenciar</span>
+              </button>
+              <button
+                class="control-button"
+                type="button"
+                id="copy-invite-button"
+              >
+                <span class="control-icon" aria-hidden="true">↗</span>
+                <span>Convidar</span>
+              </button>
+              <button
+                class="control-button control-danger"
+                type="button"
+                id="leave-room-button"
+              >
+                <span class="control-icon" aria-hidden="true">×</span>
+                <span>Sair</span>
+              </button>
+              <button
+                class="button audio-unlock-button"
+                type="button"
+                id="enable-audio-button"
+                hidden
+              >
+                Ativar áudio recebido
+              </button>
+            </nav>
+          </div>
+
+          <div id="remote-audio-container" hidden></div>
+        </section>
+      </main>
+    </div>
+
+    <div
+      class="toast-region"
+      id="toast-region"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+
+    <dialog
+      class="confirm-dialog"
+      id="leave-dialog"
+      aria-labelledby="leave-dialog-title"
+    >
+      <form method="dialog">
+        <div class="dialog-symbol" aria-hidden="true">↙</div>
+        <h2 id="leave-dialog-title">Sair da sala?</h2>
+        <p id="leave-dialog-description">Você deixará esta conversa.</p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" type="submit" value="cancel">
+            Continuar na sala
+          </button>
+          <button class="button button-danger" type="submit" value="confirm">
+            Sair agora
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <noscript>
+      <div class="noscript-message">
+        Ative o JavaScript no navegador para usar o Cloak.
+      </div>
+    </noscript>
+  </body>
+</html>
