@@ -18,6 +18,7 @@
     chatSendTimeout: 7000,
     messageSizeLimit: 4096,
     activeSessionKey: "cloak-active-room-v2",
+    voiceProfileKey: "cloak-voice-profile-v1",
     activeSessionMaxAge: 45000,
     restoreRetryWindow: 45000,
     peerOptions: {
@@ -35,6 +36,44 @@
   const ICON_PATHS = Object.freeze({
     microphoneOff: "src/icons/microphone%20red%20off.png",
     microphoneOn: "src/icons/microphone%20green%20on.png",
+  });
+
+  const VOICE_PRESETS = Object.freeze({
+    natural: Object.freeze({
+      label: "Natural",
+      bass: 0,
+      mid: 0,
+      treble: 0,
+      intensity: 0,
+    }),
+    thin: Object.freeze({
+      label: "Fina",
+      bass: -4,
+      mid: 2,
+      treble: 5,
+      intensity: 78,
+    }),
+    deep: Object.freeze({
+      label: "Grave",
+      bass: 6,
+      mid: 1,
+      treble: -3,
+      intensity: 78,
+    }),
+    robot: Object.freeze({
+      label: "Robô",
+      bass: -3,
+      mid: 5,
+      treble: 2,
+      intensity: 86,
+    }),
+    electronic: Object.freeze({
+      label: "Eletrônica",
+      bass: 2,
+      mid: -1,
+      treble: 5,
+      intensity: 74,
+    }),
   });
 
   const dom = {
@@ -95,12 +134,32 @@
     muteButton: document.querySelector("#mute-button"),
     muteButtonIcon: document.querySelector("#mute-button-icon"),
     muteButtonLabel: document.querySelector("#mute-button-label"),
+    voiceEqualizerButton: document.querySelector("#voice-equalizer-button"),
+    voiceEqualizerLabel: document.querySelector("#voice-equalizer-label"),
     leaveRoomButton: document.querySelector("#leave-room-button"),
     enableAudioButton: document.querySelector("#enable-audio-button"),
     remoteAudioContainer: document.querySelector("#remote-audio-container"),
     toastRegion: document.querySelector("#toast-region"),
     leaveDialog: document.querySelector("#leave-dialog"),
     leaveDialogDescription: document.querySelector("#leave-dialog-description"),
+    equalizerDialog: document.querySelector("#equalizer-dialog"),
+    equalizerCloseButton: document.querySelector("#equalizer-close-button"),
+    voicePresets: document.querySelector("#voice-presets"),
+    voiceBass: document.querySelector("#voice-bass"),
+    voiceBassValue: document.querySelector("#voice-bass-value"),
+    voiceMid: document.querySelector("#voice-mid"),
+    voiceMidValue: document.querySelector("#voice-mid-value"),
+    voiceTreble: document.querySelector("#voice-treble"),
+    voiceTrebleValue: document.querySelector("#voice-treble-value"),
+    voiceIntensity: document.querySelector("#voice-intensity"),
+    voiceIntensityValue: document.querySelector("#voice-intensity-value"),
+    voiceMonitorButton: document.querySelector("#voice-monitor-button"),
+    voiceMonitorLabel: document.querySelector("#voice-monitor-label"),
+    voiceResetButton: document.querySelector("#voice-reset-button"),
+    voiceSaveDefaultButton: document.querySelector(
+      "#voice-save-default-button",
+    ),
+    equalizerStatus: document.querySelector("#equalizer-status"),
   };
 
   const state = {
@@ -133,6 +192,13 @@
     remoteAudios: new Map(),
     participantOutputSettings: new Map(),
     audioContext: null,
+    voiceEngine: null,
+    voiceEnginePromise: null,
+    voiceEngineGeneration: 0,
+    voiceWorkletPromise: null,
+    voiceSettings: createNaturalVoiceSettings(),
+    voiceMonitoring: false,
+    voicePreparing: false,
     permissionSource: null,
     permissionAnalyser: null,
     permissionMeterFrame: 0,
@@ -159,8 +225,87 @@
     pendingChatSend: null,
   };
 
+  function createNaturalVoiceSettings() {
+    return {
+      preset: "natural",
+      bass: 0,
+      mid: 0,
+      treble: 0,
+      intensity: 0,
+    };
+  }
+
+  function clampVoiceValue(value, minimum, maximum, fallback = 0) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.min(maximum, Math.max(minimum, numeric));
+  }
+
+  function parseVoiceSettings(candidate) {
+    if (!candidate || typeof candidate !== "object") return null;
+    const preset = Object.prototype.hasOwnProperty.call(
+      VOICE_PRESETS,
+      candidate.preset,
+    )
+      ? candidate.preset
+      : "natural";
+    const recommended = VOICE_PRESETS[preset];
+    return {
+      preset,
+      bass: clampVoiceValue(candidate.bass, -12, 12, recommended.bass),
+      mid: clampVoiceValue(candidate.mid, -12, 12, recommended.mid),
+      treble: clampVoiceValue(candidate.treble, -12, 12, recommended.treble),
+      intensity: clampVoiceValue(
+        candidate.intensity,
+        0,
+        100,
+        recommended.intensity,
+      ),
+    };
+  }
+
+  function serializeVoiceSettings(settings) {
+    const parsed = parseVoiceSettings(settings) || createNaturalVoiceSettings();
+    return {
+      preset: parsed.preset,
+      bass: parsed.bass,
+      mid: parsed.mid,
+      treble: parsed.treble,
+      intensity: parsed.intensity,
+    };
+  }
+
+  function readStoredVoiceProfile() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(CONFIG.voiceProfileKey));
+      if (stored?.version !== 1) return createNaturalVoiceSettings();
+      return (
+        parseVoiceSettings(stored.settings) || createNaturalVoiceSettings()
+      );
+    } catch (_) {
+      return createNaturalVoiceSettings();
+    }
+  }
+
+  function storeVoiceProfile() {
+    try {
+      localStorage.setItem(
+        CONFIG.voiceProfileKey,
+        JSON.stringify({
+          version: 1,
+          settings: serializeVoiceSettings(state.voiceSettings),
+        }),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function init() {
     bindEvents();
+    state.voiceSettings = readStoredVoiceProfile();
+    syncVoiceEqualizerUI();
     updateNameCounter();
     resetChat();
     resetParticipantOutputSettings();
@@ -237,6 +382,8 @@
           typeof saved.selectedAudioInputId === "string"
             ? saved.selectedAudioInputId.slice(0, 512)
             : "",
+        voiceSettings:
+          parseVoiceSettings(saved.voiceSettings) || readStoredVoiceProfile(),
         chatMessages,
         chatSequence,
         reservedMembers,
@@ -261,6 +408,7 @@
         listener: !state.microphoneGranted,
         muted: state.muted,
         selectedAudioInputId: state.selectedAudioInputId,
+        voiceSettings: serializeVoiceSettings(state.voiceSettings),
         chatMessages: state.isHost
           ? state.chatMessages.map(serializeChatMessage)
           : [],
@@ -301,10 +449,14 @@
     state.isHost = saved.mode === "create";
     state.hostPeerId = roomPeerId(saved.roomCode);
     state.muted = saved.muted;
+    state.voiceSettings =
+      parseVoiceSettings(saved.voiceSettings) || readStoredVoiceProfile();
+    syncVoiceEqualizerUI();
     dom.displayName.value = saved.displayName;
     dom.roomCode.value = formatRoomCode(saved.roomCode);
     updateNameCounter();
 
+    stopSilentStream();
     state.silentStream = createSilentStream();
     state.localStream = state.silentStream;
     state.microphoneGranted = false;
@@ -312,6 +464,7 @@
     updateRoomDetails();
     updateMuteControl();
     updateAudioInputSelectorState();
+    syncVoiceEqualizerUI();
     setConnectionStatus("connecting", "Restaurando…");
     showScreen("room");
     document.title = `Sala ${formatRoomCode(state.roomCode)} — Cloak`;
@@ -456,6 +609,7 @@
       return false;
     }
 
+    state.voicePreparing = true;
     state.localStream = stream;
     state.microphoneGranted = true;
     state.enteredWithMicrophone = true;
@@ -464,6 +618,27 @@
     watchLocalMicrophoneTrack(track);
     state.selectedAudioInputId = getTrackDeviceId(track);
     dom.microphoneLabel.textContent = track.label || "Microfone atual";
+    try {
+      await ensureVoiceEngine(stream);
+    } catch (_) {
+      // A voz natural continua disponível quando o processamento não inicia.
+    } finally {
+      if (mediaGeneration === state.mediaGeneration)
+        state.voicePreparing = false;
+    }
+    if (
+      !isRestoredMicrophoneCurrent(
+        mediaGeneration,
+        expectedRoomCode,
+        expectedPeerId,
+        expectedResumeToken,
+      )
+    ) {
+      if (state.voiceEngine?.inputStream === stream) detachVoiceInput(stream);
+      stream.getTracks().forEach((item) => item.stop());
+      return false;
+    }
+    syncLocalAudioGates();
     return true;
   }
 
@@ -501,6 +676,7 @@
     }
     updateMuteControl();
     updateAudioInputSelectorState();
+    syncVoiceEqualizerUI();
     const self = state.participants.get(state.selfPeerId);
     if (self) {
       self.listener = !state.microphoneGranted;
@@ -510,14 +686,17 @@
     }
     if (restored && state.microphoneGranted) {
       await publishRestoredMicrophoneTrack();
-      await addAnalysisNode(state.selfPeerId, state.localStream);
+      await addAnalysisNode(
+        state.selfPeerId,
+        getProcessedVoiceStream() || state.localStream,
+      );
       await refreshAudioInputDevices();
     }
     saveActiveSession();
   }
 
   async function publishRestoredMicrophoneTrack() {
-    const track = state.localStream?.getAudioTracks()[0];
+    const track = getPreferredVoiceTrack();
     if (!track || track.readyState !== "live") return;
 
     const calls = Array.from(state.mediaCalls.entries());
@@ -594,6 +773,25 @@
     dom.sidebarInviteButton.addEventListener("click", copyInviteLink);
     dom.copyInviteButton.addEventListener("click", copyInviteLink);
     dom.muteButton.addEventListener("click", toggleMute);
+    dom.voiceEqualizerButton.addEventListener("click", openVoiceEqualizer);
+    dom.equalizerCloseButton.addEventListener("click", () =>
+      dom.equalizerDialog.close(),
+    );
+    dom.voicePresets.addEventListener("change", handleVoicePresetChange);
+    [dom.voiceBass, dom.voiceMid, dom.voiceTreble, dom.voiceIntensity].forEach(
+      (range) => {
+        range.addEventListener("input", handleVoiceAdjustmentInput);
+        range.addEventListener("change", announceVoiceAdjustment);
+      },
+    );
+    dom.voiceMonitorButton.addEventListener("click", toggleVoiceMonitor);
+    dom.voiceResetButton.addEventListener("click", resetVoiceEqualizer);
+    dom.voiceSaveDefaultButton.addEventListener("click", saveVoiceProfile);
+    dom.equalizerDialog.addEventListener("close", () => {
+      stopVoiceMonitor();
+      dom.equalizerStatus.textContent = "";
+      dom.voiceEqualizerButton.focus();
+    });
     dom.participantsGrid.addEventListener(
       "input",
       handleParticipantOutputInput,
@@ -613,6 +811,9 @@
     dom.emojiPicker.addEventListener("click", handleEmojiSelection);
     dom.emojiPicker.addEventListener("keydown", handleEmojiPickerKeydown);
     document.addEventListener("click", handleDocumentClick);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopVoiceMonitor();
+    });
 
     dom.leaveDialog.addEventListener("close", () => {
       if (dom.leaveDialog.returnValue === "confirm") {
@@ -657,6 +858,15 @@
     window.addEventListener("pageshow", (event) => {
       if (event.persisted) location.reload();
     });
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        if (state.joined && state.audioContext?.state === "suspended") {
+          void resumeAudioContext();
+        }
+      },
+      { passive: true },
+    );
 
     if (navigator.mediaDevices?.addEventListener) {
       navigator.mediaDevices.addEventListener(
@@ -776,6 +986,7 @@
         capturedStream.getTracks().forEach((track) => track.stop());
         return;
       }
+      state.voicePreparing = true;
       state.localStream = capturedStream;
 
       const [track] = state.localStream.getAudioTracks();
@@ -790,6 +1001,23 @@
       watchLocalMicrophoneTrack(track);
       state.selectedAudioInputId = getTrackDeviceId(track);
 
+      try {
+        await ensureVoiceEngine(capturedStream);
+      } catch (_) {
+        // A captura natural permanece disponível como modo de compatibilidade.
+      } finally {
+        if (mediaGeneration === state.mediaGeneration)
+          state.voicePreparing = false;
+      }
+      if (mediaGeneration !== state.mediaGeneration) {
+        if (state.voiceEngine?.inputStream === capturedStream) {
+          detachVoiceInput(capturedStream);
+        }
+        capturedStream.getTracks().forEach((item) => item.stop());
+        return;
+      }
+      syncLocalAudioGates();
+
       dom.microphoneLabel.textContent = track.label || "Dispositivo padrão";
       dom.permissionInitial.hidden = true;
       dom.microphoneReady.hidden = false;
@@ -799,7 +1027,9 @@
         if (state.microphoneGranted) handleLocalMicrophoneEnded();
         return;
       }
-      await startPermissionMeter(state.localStream);
+      await startPermissionMeter(
+        getProcessedVoiceStream() || state.localStream,
+      );
       if (mediaGeneration !== state.mediaGeneration) return;
       if (track.readyState !== "live") {
         if (state.microphoneGranted) handleLocalMicrophoneEnded();
@@ -854,17 +1084,16 @@
     const previousDeviceId = state.selectedAudioInputId;
     const previousMicrophoneGranted = state.microphoneGranted;
     const previousMicrophoneLabel = dom.microphoneLabel.textContent;
-    const previousMuted = state.muted;
+    const previousEngineStream = state.voiceEngine?.inputStream || null;
     const previousMember = state.participants.get(state.selfPeerId);
     const previousMemberState = previousMember
       ? { muted: previousMember.muted, listener: previousMember.listener }
       : null;
     const mediaGeneration = ++state.mediaGeneration;
     let nextStream = null;
-    let localAnalysisChanged = false;
-    const replacedSenders = [];
 
     state.switchingMicrophone = true;
+    stopVoiceMonitor();
     updateAudioInputSelectorState();
     if (!dom.permissionScreen.hidden) dom.enterRoomButton.disabled = true;
     setAudioInputStatus("Trocando o microfone…");
@@ -883,42 +1112,24 @@
       nextTrack.enabled = !state.muted;
       watchLocalMicrophoneTrack(nextTrack);
       state.pendingLocalStream = nextStream;
-
-      if (state.joined) {
-        for (const call of Array.from(state.mediaCalls.values())) {
-          if (
-            !state.mediaCalls.has(call.peer) ||
-            call.peerConnection?.signalingState === "closed"
-          ) {
-            continue;
-          }
-          const sender = getAudioSender(call);
-          if (!sender || typeof sender.replaceTrack !== "function") {
-            throw createAppError("microphone-switch-unsupported", "");
-          }
-          await sender.replaceTrack(nextTrack);
-          replacedSenders.push(sender);
-        }
-
-        for (const call of Array.from(state.mediaCalls.values())) {
-          if (
-            !state.mediaCalls.has(call.peer) ||
-            call.peerConnection?.signalingState === "closed"
-          ) {
-            continue;
-          }
-          const sender = getAudioSender(call);
-          if (!sender || typeof sender.replaceTrack !== "function") {
-            throw createAppError("microphone-switch-unsupported", "");
-          }
-          if (sender.track !== nextTrack) {
-            await sender.replaceTrack(nextTrack);
-            replacedSenders.push(sender);
-          }
-        }
+      state.voicePreparing = true;
+      try {
+        await ensureVoiceEngine(nextStream);
+      } catch (_) {
+        // Compatibilidade: a voz natural continua usando a faixa do microfone.
+      } finally {
+        if (mediaGeneration === state.mediaGeneration)
+          state.voicePreparing = false;
       }
 
       if (mediaGeneration !== state.mediaGeneration) {
+        if (state.voiceEngine?.inputStream === nextStream) {
+          if (previousTrack?.readyState === "live") {
+            attachVoiceInput(state.voiceEngine, previousStream);
+          } else {
+            detachVoiceInput(nextStream);
+          }
+        }
         nextStream.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -928,22 +1139,32 @@
 
       stopPermissionMeter();
       removeAnalysisNode(state.selfPeerId);
-      localAnalysisChanged = true;
       state.localStream = nextStream;
       state.pendingLocalStream = null;
       state.selectedAudioInputId = getTrackDeviceId(nextTrack) || deviceId;
       state.microphoneGranted = true;
       state.enteredWithMicrophone = true;
-      state.muted = previousMuted;
-      nextTrack.enabled = !state.muted;
       dom.microphoneLabel.textContent =
         nextTrack.label || "Dispositivo selecionado";
+      syncLocalAudioGates();
 
-      if (state.joined) await addAnalysisNode(state.selfPeerId, nextStream);
-      else await startPermissionMeter(nextStream);
-      if (mediaGeneration !== state.mediaGeneration) return;
-      if (nextTrack.readyState !== "live") {
-        throw createAppError("microphone-ended", "");
+      const analysisStream = getProcessedVoiceStream() || nextStream;
+      if (state.joined) {
+        await publishCurrentVoiceTrackToCalls();
+        await addAnalysisNode(state.selfPeerId, analysisStream);
+      } else {
+        await startPermissionMeter(analysisStream);
+      }
+      if (
+        mediaGeneration !== state.mediaGeneration ||
+        nextTrack.readyState !== "live"
+      ) {
+        throw createAppError(
+          mediaGeneration !== state.mediaGeneration
+            ? "microphone-switch-cancelled"
+            : "microphone-ended",
+          "",
+        );
       }
 
       const self = state.participants.get(state.selfPeerId);
@@ -956,11 +1177,19 @@
       }
 
       await refreshAudioInputDevices();
-      if (mediaGeneration !== state.mediaGeneration) return;
-      if (nextTrack.readyState !== "live") {
-        throw createAppError("microphone-ended", "");
+      if (
+        mediaGeneration !== state.mediaGeneration ||
+        nextTrack.readyState !== "live"
+      ) {
+        throw createAppError(
+          mediaGeneration !== state.mediaGeneration
+            ? "microphone-switch-cancelled"
+            : "microphone-ended",
+          "",
+        );
       }
       previousStream?.getTracks().forEach((track) => track.stop());
+      syncVoiceEqualizerUI();
       setAudioInputStatus(
         "Microfone alterado. A nova entrada já está sendo usada.",
       );
@@ -968,12 +1197,25 @@
       if (state.joined) showToast("Microfone alterado com sucesso.");
     } catch (error) {
       if (mediaGeneration !== state.mediaGeneration) {
+        if (state.voiceEngine?.inputStream === nextStream) {
+          if (
+            previousEngineStream === previousStream &&
+            previousTrack?.readyState === "live"
+          ) {
+            attachVoiceInput(state.voiceEngine, previousStream);
+          } else {
+            detachVoiceInput(nextStream);
+          }
+        }
         nextStream?.getTracks().forEach((track) => track.stop());
         return;
       }
-      const nextTrack = nextStream?.getAudioTracks()[0] || null;
       const rollbackTrack =
         previousTrack?.readyState === "live" ? previousTrack : null;
+      if (state.voiceEngine?.inputStream === nextStream) {
+        if (rollbackTrack) attachVoiceInput(state.voiceEngine, previousStream);
+        else detachVoiceInput(nextStream);
+      }
 
       state.pendingLocalStream = null;
       state.localStream = rollbackTrack
@@ -983,35 +1225,19 @@
       state.microphoneGranted = Boolean(
         rollbackTrack && previousMicrophoneGranted,
       );
-      state.muted = rollbackTrack ? previousMuted : true;
+      state.muted = rollbackTrack ? state.muted : true;
       dom.microphoneLabel.textContent = rollbackTrack
         ? previousMicrophoneLabel
         : "Microfone desconectado";
-
-      const rollbackSenders = async () => {
-        const senders = new Set(replacedSenders);
-        state.mediaCalls.forEach((call) => {
-          const sender = getAudioSender(call);
-          if (sender?.track === nextTrack) senders.add(sender);
-        });
-        await Promise.allSettled(
-          Array.from(senders).map((sender) =>
-            sender.replaceTrack(rollbackTrack),
-          ),
-        );
-      };
-
-      await rollbackSenders();
-      await rollbackSenders();
+      syncLocalAudioGates();
+      await publishCurrentVoiceTrackToCalls();
       nextStream?.getTracks().forEach((track) => track.stop());
-      if (
-        localAnalysisChanged &&
-        state.microphoneGranted &&
-        previousStream?.getAudioTracks().length
-      ) {
+
+      if (state.microphoneGranted && rollbackTrack) {
+        const analysisStream = getProcessedVoiceStream() || previousStream;
         if (state.joined)
-          await addAnalysisNode(state.selfPeerId, previousStream);
-        else await startPermissionMeter(previousStream);
+          await addAnalysisNode(state.selfPeerId, analysisStream);
+        else await startPermissionMeter(analysisStream);
       }
       const self = state.participants.get(state.selfPeerId);
       if (self) {
@@ -1023,6 +1249,7 @@
         renderParticipants();
         sendLocalMemberState();
       }
+      syncVoiceEqualizerUI();
       synchronizeAudioInputSelectors();
       setAudioInputStatus(microphoneSwitchErrorMessage(error), true);
       if (state.joined) showToast(microphoneSwitchErrorMessage(error), "error");
@@ -1293,7 +1520,7 @@
       ) {
         dom.permissionInitial.hidden = true;
         dom.microphoneReady.hidden = false;
-        startPermissionMeter(state.localStream);
+        startPermissionMeter(getProcessedVoiceStream() || state.localStream);
       } else {
         dom.permissionInitial.hidden = false;
         dom.microphoneReady.hidden = true;
@@ -1724,10 +1951,10 @@
       const expectedResumeToken = state.memberResumeTokens.get(connection.peer);
       const isResume = Boolean(
         existingMember &&
-          !existingMember.host &&
-          !existingConnection &&
-          expectedResumeToken &&
-          resumeToken === expectedResumeToken,
+        !existingMember.host &&
+        !existingConnection &&
+        expectedResumeToken &&
+        resumeToken === expectedResumeToken,
       );
 
       if (
@@ -2374,7 +2601,7 @@
 
   function sendChatHistory(connection) {
     const batches = [];
-    for (let index = 0; index < state.chatMessages.length; ) {
+    for (let index = 0; index < state.chatMessages.length;) {
       const end = index + CONFIG.chatHistoryBatchSize;
       batches.push(
         state.chatMessages.slice(index, end).map(serializeChatMessage),
@@ -2913,11 +3140,15 @@
       Array.from(state.remoteAudios.values()).map((audio) => audio.play()),
     );
     await resumeAudioContext();
-    dom.enableAudioButton.hidden = results.some(
-      (result) => result.status === "rejected",
-    )
-      ? false
-      : true;
+    const voiceProcessingBlocked =
+      state.microphoneGranted &&
+      state.voiceEngine &&
+      state.voiceEngine.context.state !== "running";
+    dom.enableAudioButton.hidden =
+      results.some((result) => result.status === "rejected") ||
+      voiceProcessingBlocked
+        ? false
+        : true;
     if (dom.enableAudioButton.hidden) showToast("Áudio recebido ativado.");
   }
 
@@ -2964,9 +3195,13 @@
     await resumeAudioContext();
 
     if (state.microphoneGranted && state.localStream?.getAudioTracks().length) {
-      addAnalysisNode(state.selfPeerId, state.localStream);
+      addAnalysisNode(
+        state.selfPeerId,
+        getProcessedVoiceStream() || state.localStream,
+      );
       refreshAudioInputDevices();
     }
+    syncVoiceEqualizerUI();
 
     document.title = `Sala ${formatRoomCode(state.roomCode)} — Cloak`;
     showToast(
@@ -3296,7 +3531,8 @@
     }
 
     state.muted = !state.muted;
-    track.enabled = !state.muted;
+    syncLocalAudioGates();
+    void publishCurrentVoiceTrackToCalls();
     const self = state.participants.get(state.selfPeerId);
     if (self) self.muted = state.muted;
     if (state.muted) setSpeaking(state.selfPeerId, false);
@@ -3330,6 +3566,10 @@
           ? "Ativar microfone"
           : "Silenciar microfone",
     );
+    dom.muteButton.setAttribute(
+      "aria-pressed",
+      String(!listener && state.muted),
+    );
   }
 
   function sendLocalMemberState() {
@@ -3358,8 +3598,11 @@
 
   function handleLocalMicrophoneEnded() {
     if (state.pageHiding) return;
+    stopVoiceMonitor();
+    detachVoiceInput(state.localStream);
     state.microphoneGranted = false;
     state.muted = true;
+    syncLocalAudioGates();
     removeAnalysisNode(state.selfPeerId);
     const self = state.participants.get(state.selfPeerId);
     if (self) {
@@ -3378,6 +3621,7 @@
       true,
     );
     updateAudioInputSelectorState();
+    syncVoiceEqualizerUI();
     refreshAudioInputDevices();
     saveActiveSession();
   }
@@ -3427,6 +3671,653 @@
     dom.volumeMeter.setAttribute("aria-valuenow", "0");
   }
 
+  async function ensureVoiceEngine(inputStream) {
+    const expectedGeneration = state.mediaGeneration;
+    const context = await ensureAudioContext();
+    if (!context?.createMediaStreamDestination) return null;
+
+    let engine = state.voiceEngine;
+    if (
+      !engine ||
+      engine.context !== context ||
+      engine.outputTrack.readyState !== "live"
+    ) {
+      if (engine) {
+        stopVoiceEngine();
+        engine = null;
+      }
+      if (!state.voiceEnginePromise) {
+        const engineGeneration = ++state.voiceEngineGeneration;
+        const promise = createVoiceEngine(
+          context,
+          inputStream,
+          engineGeneration,
+        );
+        state.voiceEnginePromise = promise;
+        promise.then(
+          () => {
+            if (state.voiceEnginePromise === promise)
+              state.voiceEnginePromise = null;
+          },
+          () => {
+            if (state.voiceEnginePromise === promise)
+              state.voiceEnginePromise = null;
+          },
+        );
+      }
+      engine = await state.voiceEnginePromise;
+    }
+
+    if (!engine) return null;
+    if (
+      expectedGeneration !== state.mediaGeneration ||
+      state.pageHiding ||
+      !inputStream
+        ?.getAudioTracks()
+        .some((track) => track.readyState === "live")
+    ) {
+      window.setTimeout(() => {
+        if (state.voiceEngine === engine && !engine.inputStream)
+          stopVoiceEngine();
+      }, 0);
+      return null;
+    }
+    if (engine.inputStream !== inputStream)
+      attachVoiceInput(engine, inputStream);
+    applyVoiceSettingsToEngine();
+    syncLocalAudioGates();
+    return engine;
+  }
+
+  async function createVoiceEngine(
+    context,
+    inputStream = null,
+    engineGeneration = state.voiceEngineGeneration,
+  ) {
+    const highpass = context.createBiquadFilter();
+    highpass.type = "highpass";
+    highpass.frequency.value = 70;
+    highpass.Q.value = 0.7;
+
+    const bass = context.createBiquadFilter();
+    bass.type = "lowshelf";
+    bass.frequency.value = 180;
+    const mid = context.createBiquadFilter();
+    mid.type = "peaking";
+    mid.frequency.value = 1100;
+    mid.Q.value = 0.82;
+    const treble = context.createBiquadFilter();
+    treble.type = "highshelf";
+    treble.frequency.value = 3800;
+
+    const fallbackGain = context.createGain();
+    fallbackGain.gain.value = 1;
+    const effectGain = context.createGain();
+    effectGain.gain.value = 0;
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -10;
+    compressor.knee.value = 5;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.16;
+    const outboundGain = context.createGain();
+    outboundGain.gain.value = 0;
+    const monitorGain = context.createGain();
+    monitorGain.gain.value = 0;
+    const destination = context.createMediaStreamDestination();
+    const outputTrack = destination.stream.getAudioTracks()[0];
+    if (!outputTrack) throw new Error("voice-output-unavailable");
+
+    highpass.connect(bass);
+    bass.connect(mid);
+    mid.connect(treble);
+    treble.connect(fallbackGain);
+    fallbackGain.connect(compressor);
+    compressor.connect(outboundGain);
+    outboundGain.connect(destination);
+    compressor.connect(monitorGain);
+    monitorGain.connect(context.destination);
+
+    const engine = {
+      context,
+      source: null,
+      inputStream: null,
+      highpass,
+      bass,
+      mid,
+      treble,
+      fallbackGain,
+      effectGain,
+      worklet: null,
+      workletAvailable: false,
+      compressor,
+      outboundGain,
+      monitorGain,
+      destination,
+      outboundStream: destination.stream,
+      outputTrack,
+      contextStateHandler: null,
+    };
+
+    if (engineGeneration !== state.voiceEngineGeneration) {
+      destroyDetachedVoiceEngine(engine);
+      return null;
+    }
+    state.voiceEngine = engine;
+    if (inputStream?.getAudioTracks().length)
+      attachVoiceInput(engine, inputStream);
+
+    try {
+      await loadVoiceWorklet(context);
+      if (engineGeneration !== state.voiceEngineGeneration) {
+        destroyDetachedVoiceEngine(engine);
+        return null;
+      }
+      const worklet = new AudioWorkletNode(context, "cloak-voice-effects", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        channelCount: 1,
+        channelCountMode: "explicit",
+      });
+      engine.worklet = worklet;
+      engine.workletAvailable = true;
+      treble.connect(worklet);
+      worklet.connect(effectGain);
+      effectGain.connect(compressor);
+      worklet.addEventListener("processorerror", () => {
+        if (state.voiceEngine !== engine) return;
+        engine.workletAvailable = false;
+        fadeAudioParam(engine.effectGain.gain, 0, 0.012);
+        fadeAudioParam(engine.fallbackGain.gain, 1, 0.012);
+        syncVoiceEqualizerUI();
+        setEqualizerStatus(
+          "Os efeitos especiais pararam. Sua voz natural continua ativa.",
+          true,
+        );
+      });
+      fadeAudioParam(fallbackGain.gain, 0, 0.012);
+      fadeAudioParam(effectGain.gain, 1, 0.012);
+    } catch (_) {
+      engine.workletAvailable = false;
+    }
+
+    if (engineGeneration !== state.voiceEngineGeneration) {
+      destroyDetachedVoiceEngine(engine);
+      return null;
+    }
+
+    engine.contextStateHandler = () => {
+      if (state.voiceEngine === engine && state.joined) {
+        if (
+          state.microphoneGranted &&
+          !state.muted &&
+          engine.context.state !== "running"
+        ) {
+          dom.enableAudioButton.hidden = false;
+          dom.enableAudioButton.textContent = "Ativar áudio e efeitos";
+        } else if (engine.context.state === "running") {
+          dom.enableAudioButton.hidden = true;
+          dom.enableAudioButton.textContent = "Ativar áudio recebido";
+        }
+        void publishCurrentVoiceTrackToCalls();
+      }
+    };
+    context.addEventListener("statechange", engine.contextStateHandler);
+    return engine;
+  }
+
+  function loadVoiceWorklet(context) {
+    if (!context.audioWorklet?.addModule) {
+      return Promise.reject(new Error("audio-worklet-unavailable"));
+    }
+    if (state.voiceWorkletPromise?.context === context) {
+      return state.voiceWorkletPromise.promise;
+    }
+    const promise = context.audioWorklet.addModule(
+      new URL("voice-effects-processor.js?v=1", document.baseURI),
+    );
+    state.voiceWorkletPromise = { context, promise };
+    promise.catch(() => {
+      if (state.voiceWorkletPromise?.promise === promise) {
+        state.voiceWorkletPromise = null;
+      }
+    });
+    return promise;
+  }
+
+  function attachVoiceInput(engine, stream) {
+    if (!stream?.getAudioTracks().length) {
+      throw new Error("microphone-missing-track");
+    }
+    const nextSource = engine.context.createMediaStreamSource(stream);
+    nextSource.connect(engine.highpass);
+    const previousSource = engine.source;
+    engine.source = nextSource;
+    engine.inputStream = stream;
+    try {
+      previousSource?.disconnect();
+    } catch (_) {
+      // A fonte anterior pode já ter sido desconectada pelo navegador.
+    }
+  }
+
+  function detachVoiceInput(stream = null) {
+    const engine = state.voiceEngine;
+    if (!engine || (stream && engine.inputStream !== stream)) return;
+    try {
+      engine.source?.disconnect();
+    } catch (_) {
+      // A fonte já estava desconectada.
+    }
+    engine.source = null;
+    engine.inputStream = null;
+    fadeAudioParam(engine.outboundGain.gain, 0, 0.006);
+  }
+
+  function voiceEffectParameters(settings) {
+    const amount = settings.intensity / 100;
+    const parameters = {
+      pitchSemitones: 0,
+      robotAmount: 0,
+      robotFrequency: 45,
+      electronicAmount: 0,
+      effectMix: 1,
+      outputGain: 0.9,
+    };
+    if (settings.preset === "thin") {
+      parameters.pitchSemitones = 7 * amount;
+    } else if (settings.preset === "deep") {
+      parameters.pitchSemitones = -7 * amount;
+    } else if (settings.preset === "robot") {
+      parameters.pitchSemitones = -1.2 * amount;
+      parameters.robotAmount = 0.9 * amount;
+      parameters.robotFrequency = 45;
+      parameters.electronicAmount = 0.1 * amount;
+    } else if (settings.preset === "electronic") {
+      parameters.pitchSemitones = 2.5 * amount;
+      parameters.robotAmount = 0.16 * amount;
+      parameters.robotFrequency = 72;
+      parameters.electronicAmount = 0.84 * amount;
+    }
+    return parameters;
+  }
+
+  function applyVoiceSettingsToEngine() {
+    const engine = state.voiceEngine;
+    if (!engine) return;
+    const settings = parseVoiceSettings(state.voiceSettings);
+    if (!settings) return;
+    state.voiceSettings = settings;
+    fadeAudioParam(engine.bass.gain, settings.bass, 0.025);
+    fadeAudioParam(engine.mid.gain, settings.mid, 0.025);
+    fadeAudioParam(engine.treble.gain, settings.treble, 0.025);
+    if (engine.workletAvailable && engine.worklet) {
+      const parameters = voiceEffectParameters(settings);
+      Object.entries(parameters).forEach(([name, value]) => {
+        const parameter = engine.worklet.parameters.get(name);
+        if (parameter) fadeAudioParam(parameter, value, 0.025);
+      });
+    }
+  }
+
+  function fadeAudioParam(parameter, value, timeConstant = 0.02) {
+    if (!parameter) return;
+    const context = state.audioContext || state.voiceEngine?.context;
+    const now = context?.currentTime || 0;
+    try {
+      parameter.cancelScheduledValues(now);
+      parameter.setTargetAtTime(value, now, timeConstant);
+    } catch (_) {
+      parameter.value = value;
+    }
+  }
+
+  function getProcessedVoiceStream() {
+    const engine = state.voiceEngine;
+    return engine?.outputTrack?.readyState === "live"
+      ? engine.outboundStream
+      : null;
+  }
+
+  function getPreferredVoiceTrack() {
+    const engine = state.voiceEngine;
+    const processedTrack = engine?.outputTrack;
+    const rawTrack = state.localStream?.getAudioTracks()[0];
+    if (processedTrack?.readyState === "live") {
+      return processedTrack;
+    }
+    if (state.voicePreparing) return null;
+    return rawTrack?.readyState === "live" ? rawTrack : null;
+  }
+
+  function syncLocalAudioGates() {
+    const rawTrack = state.localStream?.getAudioTracks()[0];
+    if (rawTrack?.readyState === "live") {
+      rawTrack.enabled = !state.muted || state.voiceMonitoring;
+    }
+    const engine = state.voiceEngine;
+    if (!engine) return;
+    const hasInput = Boolean(
+      engine.inputStream
+        ?.getAudioTracks()
+        .some((track) => track.readyState === "live"),
+    );
+    engine.outputTrack.enabled = hasInput && !state.muted;
+    fadeAudioParam(
+      engine.outboundGain.gain,
+      hasInput && !state.muted ? 1 : 0,
+      0.006,
+    );
+    fadeAudioParam(
+      engine.monitorGain.gain,
+      hasInput && state.voiceMonitoring ? 0.42 : 0,
+      0.012,
+    );
+  }
+
+  async function publishCurrentVoiceTrackToCalls() {
+    const track = getPreferredVoiceTrack();
+    if (!track || !state.joined || state.leaving) return false;
+    let published = true;
+    await Promise.allSettled(
+      Array.from(state.mediaCalls.entries()).map(async ([peerId, call]) => {
+        if (state.mediaCalls.get(peerId) !== call) return;
+        const sender = getAudioSender(call);
+        if (!sender?.replaceTrack) {
+          published = false;
+          closeMediaForPeer(peerId);
+          return;
+        }
+        if (sender.track !== track) {
+          try {
+            await sender.replaceTrack(track);
+          } catch (_) {
+            published = false;
+            if (state.mediaCalls.get(peerId) === call)
+              closeMediaForPeer(peerId);
+          }
+        }
+      }),
+    );
+    return published;
+  }
+
+  function stopVoiceEngine() {
+    stopVoiceMonitor();
+    const engine = state.voiceEngine;
+    state.voiceEngineGeneration += 1;
+    state.voiceEngine = null;
+    state.voiceEnginePromise = null;
+    if (!engine) return;
+    if (engine.contextStateHandler) {
+      engine.context.removeEventListener(
+        "statechange",
+        engine.contextStateHandler,
+      );
+    }
+    [
+      engine.source,
+      engine.highpass,
+      engine.bass,
+      engine.mid,
+      engine.treble,
+      engine.fallbackGain,
+      engine.effectGain,
+      engine.worklet,
+      engine.compressor,
+      engine.outboundGain,
+      engine.monitorGain,
+      engine.destination,
+    ].forEach((node) => {
+      try {
+        node?.disconnect();
+      } catch (_) {
+        // O nó já pode estar desconectado.
+      }
+    });
+    try {
+      engine.worklet?.port?.close();
+    } catch (_) {
+      // O processador já foi finalizado.
+    }
+    engine.outboundStream.getTracks().forEach((track) => track.stop());
+  }
+
+  function destroyDetachedVoiceEngine(engine) {
+    if (!engine) return;
+    [
+      engine.source,
+      engine.highpass,
+      engine.bass,
+      engine.mid,
+      engine.treble,
+      engine.fallbackGain,
+      engine.effectGain,
+      engine.worklet,
+      engine.compressor,
+      engine.outboundGain,
+      engine.monitorGain,
+      engine.destination,
+    ].forEach((node) => {
+      try {
+        node?.disconnect();
+      } catch (_) {
+        // O nó obsoleto já pode estar desconectado.
+      }
+    });
+    try {
+      engine.worklet?.port?.close();
+    } catch (_) {
+      // O processador obsoleto já foi finalizado.
+    }
+    engine.outboundStream?.getTracks().forEach((track) => track.stop());
+  }
+
+  function openVoiceEqualizer() {
+    syncVoiceEqualizerUI();
+    if (typeof dom.equalizerDialog.showModal === "function") {
+      dom.equalizerDialog.showModal();
+    } else {
+      dom.equalizerDialog.setAttribute("open", "");
+    }
+    requestAnimationFrame(() => {
+      dom.voicePresets.querySelector("input:checked")?.focus();
+    });
+  }
+
+  function handleVoicePresetChange(event) {
+    const input = event.target.closest('input[name="voice-preset"]');
+    if (
+      !input ||
+      !Object.prototype.hasOwnProperty.call(VOICE_PRESETS, input.value)
+    )
+      return;
+    const preset = VOICE_PRESETS[input.value];
+    state.voiceSettings = {
+      preset: input.value,
+      bass: preset.bass,
+      mid: preset.mid,
+      treble: preset.treble,
+      intensity: preset.intensity,
+    };
+    applyVoiceSettingsToEngine();
+    syncVoiceEqualizerUI();
+    saveActiveSession();
+    if (
+      input.value !== "natural" &&
+      state.voiceEngine &&
+      !state.voiceEngine.workletAvailable
+    ) {
+      setEqualizerStatus(
+        "Este navegador aplicará o ajuste de tom, mas não o efeito especial.",
+        true,
+      );
+    } else {
+      setEqualizerStatus(`Estilo ${preset.label} aplicado à sua voz.`);
+    }
+  }
+
+  function handleVoiceAdjustmentInput() {
+    state.voiceSettings = {
+      ...state.voiceSettings,
+      bass: clampVoiceValue(dom.voiceBass.value, -12, 12),
+      mid: clampVoiceValue(dom.voiceMid.value, -12, 12),
+      treble: clampVoiceValue(dom.voiceTreble.value, -12, 12),
+      intensity: clampVoiceValue(dom.voiceIntensity.value, 0, 100),
+    };
+    applyVoiceSettingsToEngine();
+    syncVoiceEqualizerUI();
+    saveActiveSession();
+  }
+
+  function announceVoiceAdjustment() {
+    setEqualizerStatus(
+      `Ajuste personalizado do estilo ${VOICE_PRESETS[state.voiceSettings.preset].label}.`,
+    );
+  }
+
+  function resetVoiceEqualizer() {
+    state.voiceSettings = createNaturalVoiceSettings();
+    applyVoiceSettingsToEngine();
+    syncVoiceEqualizerUI();
+    saveActiveSession();
+    setEqualizerStatus("Voz natural restaurada.");
+  }
+
+  function saveVoiceProfile() {
+    const saved = storeVoiceProfile();
+    setEqualizerStatus(
+      saved
+        ? "Padrão salvo neste dispositivo para as próximas salas."
+        : "O navegador não permitiu salvar o padrão.",
+      !saved,
+    );
+    if (saved) showToast("Equalizador definido como padrão.");
+  }
+
+  async function toggleVoiceMonitor() {
+    if (state.voiceMonitoring) {
+      stopVoiceMonitor();
+      setEqualizerStatus("Teste de voz encerrado.");
+      return;
+    }
+    const rawTrack = state.localStream?.getAudioTracks()[0];
+    if (
+      !state.microphoneGranted ||
+      !rawTrack ||
+      rawTrack.readyState !== "live"
+    ) {
+      setEqualizerStatus(
+        "Ative um microfone para ouvir o teste da sua voz.",
+        true,
+      );
+      return;
+    }
+    try {
+      const engine = await ensureVoiceEngine(state.localStream);
+      await resumeAudioContext();
+      if (!engine || engine.context.state !== "running") {
+        throw new Error("voice-monitor-blocked");
+      }
+      if (state.muted && state.joined) {
+        await publishCurrentVoiceTrackToCalls();
+      }
+      state.voiceMonitoring = true;
+      syncLocalAudioGates();
+      syncVoiceEqualizerUI();
+      setEqualizerStatus("Teste ativo. Use fones para evitar eco.");
+    } catch (_) {
+      stopVoiceMonitor();
+      setEqualizerStatus(
+        "Não foi possível iniciar o teste de voz neste navegador.",
+        true,
+      );
+    }
+  }
+
+  function stopVoiceMonitor() {
+    state.voiceMonitoring = false;
+    if (state.voiceEngine) {
+      fadeAudioParam(state.voiceEngine.monitorGain.gain, 0, 0.008);
+    }
+    syncLocalAudioGates();
+    if (dom.voiceMonitorButton) {
+      dom.voiceMonitorButton.setAttribute("aria-pressed", "false");
+      dom.voiceMonitorLabel.textContent = "Ouvir minha voz";
+    }
+  }
+
+  function syncVoiceEqualizerUI() {
+    const settings =
+      parseVoiceSettings(state.voiceSettings) || createNaturalVoiceSettings();
+    state.voiceSettings = settings;
+    const preset = VOICE_PRESETS[settings.preset];
+    dom.voicePresets
+      .querySelectorAll('input[name="voice-preset"]')
+      .forEach((input) => {
+        input.checked = input.value === settings.preset;
+      });
+    const ranges = [
+      [dom.voiceBass, dom.voiceBassValue, settings.bass, "dB"],
+      [dom.voiceMid, dom.voiceMidValue, settings.mid, "dB"],
+      [dom.voiceTreble, dom.voiceTrebleValue, settings.treble, "dB"],
+      [dom.voiceIntensity, dom.voiceIntensityValue, settings.intensity, "%"],
+    ];
+    ranges.forEach(([range, output, value, unit]) => {
+      range.value = String(value);
+      output.textContent =
+        unit === "dB" ? `${value > 0 ? "+" : ""}${value} dB` : `${value}%`;
+      updateVoiceRangeFill(range, value);
+    });
+
+    const active =
+      (settings.preset !== "natural" && settings.intensity > 0) ||
+      settings.bass !== 0 ||
+      settings.mid !== 0 ||
+      settings.treble !== 0;
+    dom.voiceEqualizerButton.classList.toggle("has-active-effect", active);
+    dom.voiceEqualizerButton.setAttribute(
+      "aria-label",
+      `Abrir equalizador de voz, estilo ${preset.label}`,
+    );
+    dom.voiceEqualizerButton.title = `Equalizador: ${preset.label}`;
+    dom.voiceMonitorButton.disabled = !(
+      state.microphoneGranted &&
+      state.localStream
+        ?.getAudioTracks()
+        .some((track) => track.readyState === "live")
+    );
+    dom.voiceMonitorButton.setAttribute(
+      "aria-pressed",
+      String(state.voiceMonitoring),
+    );
+    dom.voiceMonitorLabel.textContent = state.voiceMonitoring
+      ? "Parar teste"
+      : "Ouvir minha voz";
+  }
+
+  function updateVoiceRangeFill(range, value) {
+    const minimum = Number(range.min) || 0;
+    const maximum = Number(range.max) || 100;
+    const progress = ((Number(value) - minimum) / (maximum - minimum)) * 100;
+    range.style.setProperty(
+      "--effect-fill",
+      `${Math.min(100, Math.max(0, progress))}%`,
+    );
+    range.setAttribute(
+      "aria-valuetext",
+      range === dom.voiceIntensity
+        ? `${value}%`
+        : `${value > 0 ? "+" : ""}${value} decibéis`,
+    );
+  }
+
+  function setEqualizerStatus(message, isError = false) {
+    dom.equalizerStatus.textContent = message;
+    dom.equalizerStatus.classList.toggle("is-error", isError);
+  }
+
   async function ensureAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
@@ -3444,6 +4335,13 @@
       } catch (_) {
         // O botão de desbloqueio continuará disponível se necessário.
       }
+    }
+    if (
+      state.joined &&
+      state.voiceEngine?.context.state === "running" &&
+      !state.leaving
+    ) {
+      void publishCurrentVoiceTrackToCalls();
     }
   }
 
@@ -3554,6 +4452,7 @@
     if (closeContext && state.audioContext) {
       const context = state.audioContext;
       state.audioContext = null;
+      state.voiceWorkletPromise = null;
       context.close().catch(() => {});
     }
   }
@@ -3717,10 +4616,12 @@
     dom.remoteAudioContainer.replaceChildren();
     dom.enableAudioButton.hidden = true;
     stopPermissionMeter();
+    if (stopMedia) stopVoiceEngine();
     stopAllAnalysis(stopMedia);
 
     if (stopMedia) {
       cancelAllMediaCapture();
+      stopSilentStream();
       state.silentStream = null;
       state.microphoneGranted = false;
       state.enteredWithMicrophone = false;
@@ -3733,6 +4634,7 @@
   }
 
   function stopLocalTracks() {
+    stopVoiceEngine();
     const streams = new Set(
       [state.localStream, state.pendingLocalStream].filter(Boolean),
     );
@@ -3746,6 +4648,7 @@
   function cancelAllMediaCapture() {
     state.mediaGeneration += 1;
     state.switchingMicrophone = false;
+    state.voicePreparing = false;
     clearTimeout(state.deviceRefreshTimer);
     stopLocalTracks();
   }
@@ -3767,6 +4670,10 @@
     state.resumePeerId = "";
     state.resumeToken = "";
     state.pageHiding = false;
+    state.voiceMonitoring = false;
+    state.voicePreparing = false;
+    state.voiceSettings = readStoredVoiceProfile();
+    syncVoiceEqualizerUI();
   }
 
   function resetPermissionUI() {
@@ -4029,16 +4936,68 @@
   }
 
   function getOutboundStream() {
-    if (state.pendingLocalStream) return state.pendingLocalStream;
-    if (state.localStream) return state.localStream;
+    const preferredTrack = getPreferredVoiceTrack();
+    if (preferredTrack) {
+      const processedStream = getProcessedVoiceStream();
+      if (processedStream?.getAudioTracks()[0] === preferredTrack) {
+        return processedStream;
+      }
+      if (state.localStream?.getAudioTracks()[0] === preferredTrack) {
+        return state.localStream;
+      }
+      return new MediaStream([preferredTrack]);
+    }
+    if (state.voicePreparing && state.localStream?.getAudioTracks().length) {
+      if (!state.silentStream?.getAudioTracks().length) {
+        stopSilentStream();
+        state.silentStream = createSilentStream();
+      }
+      if (state.silentStream.getAudioTracks().length) return state.silentStream;
+    }
     if (!state.silentStream) state.silentStream = createSilentStream();
     return state.silentStream;
   }
 
   function createSilentStream() {
-    return typeof window.MediaStream === "function"
-      ? new window.MediaStream()
-      : { getAudioTracks: () => [], getTracks: () => [] };
+    if (typeof window.MediaStream !== "function") {
+      return { getAudioTracks: () => [], getTracks: () => [] };
+    }
+    try {
+      const context = state.audioContext;
+      if (!context?.createMediaStreamDestination)
+        return new window.MediaStream();
+      const destination = context.createMediaStreamDestination();
+      const gain = context.createGain();
+      const oscillator = context.createOscillator();
+      gain.gain.value = 0;
+      oscillator.connect(gain);
+      gain.connect(destination);
+      oscillator.start();
+      const [track] = destination.stream.getAudioTracks();
+      if (track) {
+        track.addEventListener(
+          "ended",
+          () => {
+            try {
+              oscillator.stop();
+              oscillator.disconnect();
+              gain.disconnect();
+            } catch (_) {
+              // O placeholder silencioso já foi finalizado.
+            }
+          },
+          { once: true },
+        );
+      }
+      return destination.stream;
+    } catch (_) {
+      return new window.MediaStream();
+    }
+  }
+
+  function stopSilentStream() {
+    state.silentStream?.getTracks().forEach((track) => track.stop());
+    state.silentStream = null;
   }
 
   function generateRoomCode() {

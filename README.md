@@ -8,6 +8,8 @@ O Cloak é um chat de voz para salas pequenas que funciona direto no navegador. 
 - convite por código ou URL;
 - autorização explícita do microfone;
 - seleção da entrada de áudio antes e durante a conversa;
+- equalizador de voz com estilos Natural, Fina, Grave, Robô e Eletrônica;
+- teste local com retorno da própria voz e opção de salvar o ajuste como padrão;
 - opção de entrar apenas para ouvir;
 - áudio em tempo real com WebRTC;
 - lista de participantes e indicador de quem está falando;
@@ -58,6 +60,7 @@ O criador da sala funciona como coordenador. Por isso, se ele fechar a aba ou sa
 index.html                    interface e conteúdo
 styles.css                    identidade visual e responsividade
 app.js                        salas, microfone, WebRTC e estados
+voice-effects-processor.js    processamento dos efeitos de voz em tempo real
 .github/workflows/pages.yml   publicação automática no GitHub Pages
 ```
 
