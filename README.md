@@ -7,9 +7,12 @@ O Cloak é um chat de voz para salas pequenas que funciona direto no navegador. 
 - criação de sala com código aleatório de 12 caracteres;
 - convite por código ou URL;
 - autorização explícita do microfone;
+- seleção da entrada de áudio antes e durante a conversa;
 - opção de entrar apenas para ouvir;
 - áudio em tempo real com WebRTC;
 - lista de participantes e indicador de quem está falando;
+- volume individual e silenciamento local de participantes;
+- chat temporário de texto e emojis dentro da sala;
 - silenciar/ativar o próprio microfone;
 - estados de entrada, saída, conexão e erros;
 - limite de 6 pessoas por sala;
@@ -37,7 +40,7 @@ O endereço terá o formato `https://seu-usuario.github.io/nome-do-repositorio/`
 
 ## Como a conexão funciona
 
-O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, o áudio trafega por WebRTC diretamente entre os participantes e não é gravado pelo Cloak.
+O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, o áudio trafega por WebRTC diretamente entre os participantes e não é gravado pelo Cloak. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
 
 O criador da sala funciona como coordenador. Por isso, se ele fechar a aba ou sair, a sala termina para todos. O código é a chave de acesso: compartilhe-o apenas com quem deve participar.
 
