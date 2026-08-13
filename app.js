@@ -215,6 +215,8 @@
     pendingMembers: new Map(),
     participants: new Map(),
     mediaCalls: new Map(),
+    outgoingMediaCalls: new WeakSet(),
+    mediaRetryState: new Map(),
     pendingMediaCalls: new Map(),
     remoteAudios: new Map(),
     participantOutputSettings: new Map(),
@@ -1781,6 +1783,9 @@
 
     await confirmRoomReady(connection);
     state.joined = true;
+    state.participants.forEach((_, peerId) => {
+      if (peerId !== state.selfPeerId) answerPendingCalls(peerId);
+    });
   }
 
   function enforceGuestVoicePolicy() {
@@ -2493,6 +2498,7 @@
       message.type === "ready-ack" &&
       state.pendingReady?.connection === connection
     ) {
+      state.joined = true;
       state.pendingReady.resolve();
       return;
     }
@@ -3173,8 +3179,10 @@
 
   function handleIncomingMediaCall(call) {
     const metadata = call.metadata || {};
+    const admissionPending =
+      !state.joined && !state.isHost && Boolean(state.pendingReady);
     if (
-      !state.joined ||
+      (!state.joined && !admissionPending) ||
       state.leaving ||
       metadata.version !== CONFIG.protocolVersion ||
       normalizeRoomCode(metadata.roomCode) !== state.roomCode ||
@@ -3184,15 +3192,27 @@
       return;
     }
 
-    if (!state.participants.has(call.peer)) {
-      queuePendingCall(call);
+    const caller = state.participants.get(call.peer);
+    if (!caller) {
+      if (state.joined) queuePendingCall(call);
+      else safeCloseCall(call);
+      return;
+    }
+
+    if (!state.guestsCanSpeak && !caller.host) {
+      safeCloseCall(call);
+      return;
+    }
+
+    if (!state.joined) {
+      queuePendingCall(call, CONFIG.joinTimeout);
       return;
     }
 
     answerMediaCall(call);
   }
 
-  function queuePendingCall(call) {
+  function queuePendingCall(call, timeout = CONFIG.pendingCallTimeout) {
     const pendingCount = Array.from(state.pendingMediaCalls.values()).reduce(
       (total, calls) => total + calls.length,
       0,
@@ -3202,7 +3222,8 @@
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    let timer = 0;
+    const removePendingEntry = () => {
       const calls = state.pendingMediaCalls.get(call.peer) || [];
       state.pendingMediaCalls.set(
         call.peer,
@@ -3211,8 +3232,17 @@
       if (!state.pendingMediaCalls.get(call.peer)?.length) {
         state.pendingMediaCalls.delete(call.peer);
       }
+    };
+    const discardPendingCall = () => {
+      clearTimeout(timer);
+      removePendingEntry();
+    };
+    timer = window.setTimeout(() => {
+      discardPendingCall();
       safeCloseCall(call);
-    }, CONFIG.pendingCallTimeout);
+    }, timeout);
+    call.on("close", discardPendingCall);
+    call.on("error", discardPendingCall);
 
     const calls = state.pendingMediaCalls.get(call.peer) || [];
     calls.push({ call, timer });
@@ -3229,7 +3259,8 @@
   }
 
   function answerMediaCall(call) {
-    if (!state.participants.has(call.peer) || state.leaving) {
+    const caller = state.participants.get(call.peer);
+    if (!caller || state.leaving || (!state.guestsCanSpeak && !caller.host)) {
       safeCloseCall(call);
       return;
     }
@@ -3265,8 +3296,14 @@
           roomCode: state.roomCode,
         },
       });
-      if (call) registerMediaCall(call);
+      if (call) {
+        state.outgoingMediaCalls.add(call);
+        registerMediaCall(call);
+      } else {
+        scheduleMediaRetry(peerId);
+      }
     } catch (_) {
+      scheduleMediaRetry(peerId);
       showToast(
         "Não foi possível iniciar o áudio com uma pessoa da sala.",
         "error",
@@ -3288,6 +3325,51 @@
     if (state.mediaCalls.get(peerId) !== call) return;
     state.mediaCalls.delete(peerId);
     removeRemoteAudio(peerId);
+    if (state.outgoingMediaCalls.has(call)) scheduleMediaRetry(peerId);
+  }
+
+  function scheduleMediaRetry(peerId) {
+    if (
+      !state.joined ||
+      state.leaving ||
+      getLocalListenerState() ||
+      !state.participants.has(peerId)
+    ) {
+      clearMediaRetry(peerId);
+      return;
+    }
+
+    const current = state.mediaRetryState.get(peerId) || {
+      attempts: 0,
+      timer: 0,
+    };
+    if (current.timer || current.attempts >= 3) return;
+
+    const attempts = current.attempts + 1;
+    const delay = 400 * 2 ** (attempts - 1) + Math.round(Math.random() * 250);
+    const timer = window.setTimeout(() => {
+      const pending = state.mediaRetryState.get(peerId);
+      if (!pending || pending.timer !== timer) return;
+      pending.timer = 0;
+      if (
+        !state.joined ||
+        state.leaving ||
+        getLocalListenerState() ||
+        !state.participants.has(peerId)
+      ) {
+        clearMediaRetry(peerId);
+        return;
+      }
+      if (!state.mediaCalls.has(peerId)) placeMediaCall(peerId);
+      else clearMediaRetry(peerId);
+    }, delay);
+    state.mediaRetryState.set(peerId, { attempts, timer });
+  }
+
+  function clearMediaRetry(peerId) {
+    const pending = state.mediaRetryState.get(peerId);
+    if (pending?.timer) clearTimeout(pending.timer);
+    state.mediaRetryState.delete(peerId);
   }
 
   async function attachRemoteStream(call, stream) {
@@ -3300,6 +3382,7 @@
     ) {
       return;
     }
+    clearMediaRetry(peerId);
     removeRemoteAudio(peerId);
 
     const audio = document.createElement("audio");
@@ -3370,6 +3453,7 @@
   }
 
   function closeMediaForPeer(peerId) {
+    clearMediaRetry(peerId);
     const call = state.mediaCalls.get(peerId);
     state.mediaCalls.delete(peerId);
     safeCloseCall(call);
@@ -3410,6 +3494,14 @@
       dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
     });
     await resumeAudioContext();
+    if (
+      state.microphoneGranted &&
+      state.voiceEngine &&
+      state.voiceEngine.context.state !== "running"
+    ) {
+      dom.enableAudioButton.hidden = false;
+      dom.enableAudioButton.textContent = "Ativar áudio e efeitos";
+    }
 
     if (state.microphoneGranted && state.localStream?.getAudioTracks().length) {
       addAnalysisNode(
@@ -4303,7 +4395,10 @@
     const engine = state.voiceEngine;
     const processedTrack = engine?.outputTrack;
     const rawTrack = state.localStream?.getAudioTracks()[0];
-    if (processedTrack?.readyState === "live") {
+    if (
+      processedTrack?.readyState === "live" &&
+      engine.context?.state === "running"
+    ) {
       return processedTrack;
     }
     if (state.voicePreparing) return null;
@@ -4899,6 +4994,9 @@
       });
     });
     state.pendingMediaCalls.clear();
+
+    state.mediaRetryState.forEach(({ timer }) => clearTimeout(timer));
+    state.mediaRetryState.clear();
 
     state.mediaCalls.forEach(safeCloseCall);
     state.mediaCalls.clear();

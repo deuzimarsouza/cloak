@@ -47,7 +47,7 @@ O endereço terá o formato `https://seu-usuario.github.io/nome-do-repositorio/`
 
 O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, o áudio trafega por WebRTC diretamente entre os participantes e não é gravado pelo Cloak. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
 
-O criador da sala funciona como coordenador. Por isso, se ele fechar a aba ou sair, a sala termina para todos. O código é a chave de acesso: compartilhe-o apenas com quem deve participar.
+O criador da sala funciona como coordenador. Se ele atualizar a página ou perder a conexão por alguns instantes, o Cloak tenta recuperar a mesma sala durante uma janela curta. Se o anfitrião clicar em **Sair**, a sala termina imediatamente; se fechar a aba e não retornar, os convidados veem a tentativa de reconexão antes de a sala expirar. O código é a chave de acesso: compartilhe-o apenas com quem deve participar.
 
 ## Limites deste MVP
 

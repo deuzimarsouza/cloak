@@ -17,7 +17,7 @@
       content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <title>Cloak — Salas de voz privadas</title>
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=6" />
     <link
       rel="preload"
       as="image"
@@ -34,7 +34,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=5"></script>
+    <script defer src="app.js?v=6"></script>
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -155,7 +155,11 @@
                 converse direto do navegador. Sem cadastro, sem downloads.
               </p>
 
-              <ul class="trust-list" aria-label="Vantagens do Cloak">
+              <ul
+                class="trust-list"
+                role="list"
+                aria-label="Vantagens do Cloak"
+              >
                 <li>
                   <span aria-hidden="true">01</span> Acesso por código privado
                 </li>
@@ -441,6 +445,7 @@
                 </div>
                 <div
                   class="room-summary-facts"
+                  role="group"
                   aria-label="Configurações da sala"
                 >
                   <span id="room-capacity-summary">5 lugares</span>
@@ -821,7 +826,7 @@
       aria-describedby="create-room-description"
     >
       <form class="create-room-form" id="create-room-form" novalidate>
-        <header class="create-room-header">
+        <div class="create-room-header">
           <div>
             <p class="eyebrow">Configurar nova sala</p>
             <h2 id="create-room-title">Como será sua sala?</h2>
@@ -837,7 +842,7 @@
           >
             <span aria-hidden="true">×</span>
           </button>
-        </header>
+        </div>
 
         <div class="create-room-body">
           <div class="field-group">
@@ -967,7 +972,7 @@
           ></p>
         </div>
 
-        <footer class="create-room-actions">
+        <div class="create-room-actions">
           <button
             class="button button-quiet"
             id="cancel-create-room"
@@ -978,7 +983,7 @@
           <button class="button button-primary" type="submit">
             Criar sala
           </button>
-        </footer>
+        </div>
       </form>
     </dialog>
 
@@ -1166,7 +1171,7 @@
           ></p>
         </div>
 
-        <footer class="equalizer-actions">
+        <div class="equalizer-actions">
           <button
             class="button button-quiet"
             type="button"
@@ -1181,7 +1186,7 @@
           >
             Salvar como padrão
           </button>
-        </footer>
+        </div>
       </div>
     </dialog>
 
