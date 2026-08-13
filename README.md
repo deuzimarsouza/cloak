@@ -1,10 +1,13 @@
 # Cloak
 
-O Cloak é um chat de voz para salas pequenas que funciona direto no navegador. Uma pessoa cria a sala, recebe um código automático e compartilha o convite. As demais entram pelo código ou pelo link e o navegador pede autorização antes de usar o microfone.
+O Cloak é um chat de voz que funciona direto no navegador. Uma pessoa configura e cria a sala, recebe um código automático e compartilha o convite. As demais entram pelo código ou pelo link e o navegador pede autorização antes de usar o microfone.
 
 ## O que já está pronto
 
-- criação de sala com código aleatório de 12 caracteres;
+- criação de sala com nome e código aleatório de 12 caracteres;
+- capacidade configurável de 5, 10, 15, 20, 25 ou 30 pessoas, incluindo o anfitrião;
+- permissão definida pelo anfitrião para convidados falarem ou entrarem somente para ouvir;
+- remoção de participantes pelo anfitrião;
 - convite por código ou URL;
 - autorização explícita do microfone;
 - seleção da entrada de áudio antes e durante a conversa;
@@ -17,7 +20,7 @@ O Cloak é um chat de voz para salas pequenas que funciona direto no navegador. 
 - chat temporário de texto e emojis dentro da sala;
 - silenciar/ativar o próprio microfone;
 - estados de entrada, saída, conexão e erros;
-- limite de 6 pessoas por sala;
+- limite configurável de até 30 pessoas por sala;
 - interface responsiva e acessível;
 - publicação automática no GitHub Pages.
 
@@ -50,8 +53,9 @@ O criador da sala funciona como coordenador. Por isso, se ele fechar a aba ou sa
 
 - O PeerJS Cloud é um serviço público compartilhado, adequado para protótipos, sem garantia de disponibilidade para um produto comercial.
 - A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
-- A sala usa uma malha de conexões entre os navegadores; por isso o limite é de 6 pessoas. Para grupos maiores, use uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
-- Não há contas, moderação persistente nem recuperação da sala após a saída do criador.
+- A sala usa uma malha de conexões entre os navegadores. O limite lógico é de 30 pessoas, mas muitas vozes simultâneas podem sobrecarregar CPU e upload; estabilidade garantida em grupos grandes exige uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
+- A remoção encerra e bloqueia a reconexão automática daquela sessão. Sem contas ou backend, ela não funciona como banimento permanente: alguém com o convite pode tentar entrar novamente em uma nova sessão.
+- Não há contas, moderação persistente nem recuperação da sala após a saída definitiva do criador.
 - Nunca coloque chaves secretas ou credenciais TURN permanentes no JavaScript publicado.
 
 ## Estrutura

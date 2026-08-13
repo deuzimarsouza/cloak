@@ -17,7 +17,7 @@
       content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <title>Cloak — Salas de voz privadas</title>
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=5" />
     <link
       rel="preload"
       as="image"
@@ -34,7 +34,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=3"></script>
+    <script defer src="app.js?v=5"></script>
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -164,7 +164,7 @@
                   participantes
                 </li>
                 <li>
-                  <span aria-hidden="true">03</span> Até 6 pessoas por sala
+                  <span aria-hidden="true">03</span> Até 30 pessoas por sala
                 </li>
               </ul>
 
@@ -224,6 +224,8 @@
                   class="button button-primary button-large"
                   type="button"
                   id="create-room-button"
+                  aria-haspopup="dialog"
+                  aria-controls="create-room-dialog"
                 >
                   <span>Criar uma nova sala</span>
                   <span class="button-arrow" aria-hidden="true">↗</span>
@@ -424,7 +426,7 @@
               <header class="room-summary-card panel">
                 <div class="room-summary-heading">
                   <div>
-                    <p class="room-kicker">Sua sala</p>
+                    <p class="room-kicker" id="room-kicker">Sua sala</p>
                     <h1 id="room-title" tabindex="-1">Cloak room</h1>
                   </div>
                   <div
@@ -437,9 +439,15 @@
                     <strong id="connection-status-text">Conectando…</strong>
                   </div>
                 </div>
-                <p class="room-summary-description">
-                  Converse por voz e texto com até seis participantes.
-                </p>
+                <div
+                  class="room-summary-facts"
+                  aria-label="Configurações da sala"
+                >
+                  <span id="room-capacity-summary">5 lugares</span>
+                  <span id="room-voice-policy-summary"
+                    >Participantes podem falar</span
+                  >
+                </div>
                 <p class="room-summary-privacy">
                   <span aria-hidden="true">◇</span>
                   O áudio não é gravado. As mensagens ficam somente nesta
@@ -681,15 +689,6 @@
                       >
                         🚀
                       </button>
-                      <button
-                        class="emoji-system-button"
-                        type="button"
-                        data-system-emoji
-                        aria-label="Usar qualquer emoji do teclado do Windows"
-                      >
-                        <span>Todos os emojis</span>
-                        <small>Use Win + V ou Win + .</small>
-                      </button>
                     </div>
                   </div>
 
@@ -751,11 +750,20 @@
                       </h2>
                     </div>
                     <p class="capacity-label">
-                      <span id="capacity-count">0</span>/6 lugares
+                      <span id="capacity-count">0</span>/<span
+                        id="capacity-limit"
+                        >5</span
+                      >
+                      lugares
                     </p>
                   </div>
 
-                  <div class="participants-grid" id="participants-grid"></div>
+                  <div
+                    class="participants-grid"
+                    id="participants-grid"
+                    tabindex="-1"
+                    aria-label="Lista de participantes"
+                  ></div>
 
                   <div class="waiting-card" id="waiting-card" hidden>
                     <div class="waiting-pulse" aria-hidden="true">
@@ -801,6 +809,202 @@
           </button>
           <button class="button button-danger" type="submit" value="confirm">
             Sair agora
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      class="create-room-dialog"
+      id="create-room-dialog"
+      aria-labelledby="create-room-title"
+      aria-describedby="create-room-description"
+    >
+      <form class="create-room-form" id="create-room-form" novalidate>
+        <header class="create-room-header">
+          <div>
+            <p class="eyebrow">Configurar nova sala</p>
+            <h2 id="create-room-title">Como será sua sala?</h2>
+            <p id="create-room-description">
+              Defina o nome, o limite de pessoas e quem poderá falar.
+            </p>
+          </div>
+          <button
+            class="create-room-close"
+            id="create-room-close"
+            type="button"
+            aria-label="Fechar configurações da sala"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </header>
+
+        <div class="create-room-body">
+          <div class="field-group">
+            <label for="create-room-name">Nome da sala</label>
+            <div class="input-wrap">
+              <input
+                id="create-room-name"
+                name="roomName"
+                type="text"
+                minlength="2"
+                maxlength="40"
+                autocomplete="off"
+                placeholder="Ex.: Conversa da equipe"
+                aria-describedby="create-room-name-hint create-room-name-error"
+                required
+              />
+              <span
+                class="input-counter"
+                id="create-room-name-counter"
+                aria-hidden="true"
+                >0/40</span
+              >
+            </div>
+            <p class="field-hint" id="create-room-name-hint">
+              Entre 2 e 40 caracteres.
+            </p>
+            <p class="field-error" id="create-room-name-error" role="alert"></p>
+          </div>
+
+          <fieldset class="room-capacity-fieldset">
+            <legend>Limite de participantes</legend>
+            <p class="field-hint" id="room-capacity-hint">
+              O limite inclui você, o anfitrião.
+            </p>
+            <div
+              class="room-capacity-options"
+              aria-describedby="room-capacity-hint"
+            >
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="5"
+                  checked
+                />
+                <span>5</span>
+              </label>
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="10"
+                />
+                <span>10</span>
+              </label>
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="15"
+                />
+                <span>15</span>
+              </label>
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="20"
+                />
+                <span>20</span>
+              </label>
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="25"
+                />
+                <span>25</span>
+              </label>
+              <label class="room-capacity-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="roomCapacity"
+                  value="30"
+                />
+                <span>30</span>
+              </label>
+            </div>
+            <p class="room-capacity-note">
+              Em salas acima de 10 pessoas, a estabilidade do áudio depende da
+              conexão de cada participante. O modo somente ouvir é mais leve.
+            </p>
+          </fieldset>
+
+          <label class="room-voice-permission">
+            <input
+              class="visually-hidden"
+              id="allow-participant-voice"
+              name="allowParticipantVoice"
+              type="checkbox"
+              role="switch"
+              aria-describedby="participant-voice-description"
+              checked
+            />
+            <span class="room-voice-permission-copy">
+              <strong>Permitir que participantes falem</strong>
+              <small id="participant-voice-description">
+                Quando desativado, convidados entram somente para ouvir.
+              </small>
+            </span>
+            <span class="room-permission-switch" aria-hidden="true">
+              <span></span>
+            </span>
+          </label>
+
+          <p
+            class="create-room-status"
+            id="create-room-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+
+        <footer class="create-room-actions">
+          <button
+            class="button button-quiet"
+            id="cancel-create-room"
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button class="button button-primary" type="submit">
+            Criar sala
+          </button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog
+      class="confirm-dialog"
+      id="remove-participant-dialog"
+      aria-labelledby="remove-participant-title"
+      aria-describedby="remove-participant-description"
+    >
+      <form method="dialog">
+        <div class="dialog-symbol" aria-hidden="true">×</div>
+        <h2 id="remove-participant-title">Remover participante?</h2>
+        <p id="remove-participant-description">
+          Esta pessoa será desconectada da sala.
+        </p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" type="submit" value="cancel">
+            Cancelar
+          </button>
+          <button
+            class="button button-danger"
+            type="submit"
+            value="confirm"
+            id="confirm-remove-participant"
+          >
+            Remover
           </button>
         </div>
       </form>

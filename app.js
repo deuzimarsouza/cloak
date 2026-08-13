@@ -2,8 +2,11 @@
   "use strict";
 
   const CONFIG = Object.freeze({
-    protocolVersion: 2,
-    maxParticipants: 6,
+    protocolVersion: 3,
+    maxParticipants: 30,
+    defaultRoomCapacity: 5,
+    allowedRoomCapacities: Object.freeze([5, 10, 15, 20, 25, 30]),
+    maxRoomNameLength: 40,
     roomCodeLength: 12,
     roomAlphabet: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
     peerPrefix: "cloak-room-",
@@ -16,8 +19,8 @@
     chatRateLimit: 6,
     chatRateWindow: 10000,
     chatSendTimeout: 7000,
-    messageSizeLimit: 4096,
-    activeSessionKey: "cloak-active-room-v2",
+    messageSizeLimit: 32768,
+    activeSessionKey: "cloak-active-room-v3",
     voiceProfileKey: "cloak-voice-profile-v1",
     activeSessionMaxAge: 45000,
     restoreRetryWindow: 45000,
@@ -89,6 +92,15 @@
     roomCode: document.querySelector("#room-code"),
     codeError: document.querySelector("#code-error"),
     createRoomButton: document.querySelector("#create-room-button"),
+    createRoomDialog: document.querySelector("#create-room-dialog"),
+    createRoomForm: document.querySelector("#create-room-form"),
+    createRoomClose: document.querySelector("#create-room-close"),
+    cancelCreateRoom: document.querySelector("#cancel-create-room"),
+    createRoomName: document.querySelector("#create-room-name"),
+    createRoomNameCounter: document.querySelector("#create-room-name-counter"),
+    createRoomNameError: document.querySelector("#create-room-name-error"),
+    createRoomStatus: document.querySelector("#create-room-status"),
+    allowParticipantVoice: document.querySelector("#allow-participant-voice"),
     joinRoomButton: document.querySelector("#join-room-button"),
     inviteArrival: document.querySelector("#invite-arrival"),
     permissionBackButton: document.querySelector("#permission-back-button"),
@@ -109,11 +121,17 @@
     enterRoomButton: document.querySelector("#enter-room-button"),
     permissionError: document.querySelector("#permission-error"),
     roomTitle: document.querySelector("#room-title"),
+    roomKicker: document.querySelector("#room-kicker"),
+    roomCapacitySummary: document.querySelector("#room-capacity-summary"),
+    roomVoicePolicySummary: document.querySelector(
+      "#room-voice-policy-summary",
+    ),
     sidebarRoomCode: document.querySelector("#sidebar-room-code"),
     connectionStatus: document.querySelector("#connection-status"),
     connectionStatusText: document.querySelector("#connection-status-text"),
     participantCount: document.querySelector("#participant-count"),
     capacityCount: document.querySelector("#capacity-count"),
+    capacityLimit: document.querySelector("#capacity-limit"),
     participantsGrid: document.querySelector("#participants-grid"),
     waitingCard: document.querySelector("#waiting-card"),
     chatMessages: document.querySelector("#chat-messages"),
@@ -142,6 +160,12 @@
     toastRegion: document.querySelector("#toast-region"),
     leaveDialog: document.querySelector("#leave-dialog"),
     leaveDialogDescription: document.querySelector("#leave-dialog-description"),
+    removeParticipantDialog: document.querySelector(
+      "#remove-participant-dialog",
+    ),
+    removeParticipantDescription: document.querySelector(
+      "#remove-participant-description",
+    ),
     equalizerDialog: document.querySelector("#equalizer-dialog"),
     equalizerCloseButton: document.querySelector("#equalizer-close-button"),
     voicePresets: document.querySelector("#voice-presets"),
@@ -166,6 +190,9 @@
     mode: null,
     roomCode: "",
     displayName: "",
+    roomName: "",
+    roomCapacity: CONFIG.defaultRoomCapacity,
+    guestsCanSpeak: true,
     peer: null,
     selfPeerId: "",
     hostPeerId: "",
@@ -215,6 +242,7 @@
     resumePeerId: "",
     resumeToken: "",
     memberResumeTokens: new Map(),
+    blockedResumeTokens: new Set(),
     memberReconnectTimers: new Map(),
     pageHiding: false,
     chatMessages: [],
@@ -223,6 +251,7 @@
     chatRateLimits: new Map(),
     chatHistoryTimers: new Set(),
     pendingChatSend: null,
+    pendingRemovalPeerId: "",
   };
 
   function createNaturalVoiceSettings() {
@@ -331,8 +360,9 @@
         ? saved.resumeToken
         : "";
       const age = Date.now() - Number(saved?.savedAt);
+      const roomSettings = parseRoomSettings(saved?.room);
       if (
-        saved?.version !== 2 ||
+        saved?.version !== 3 ||
         !Number.isFinite(age) ||
         age < 0 ||
         age > CONFIG.activeSessionMaxAge ||
@@ -341,7 +371,8 @@
         displayName.length < 2 ||
         displayName.length > 24 ||
         (mode === "join" &&
-          (!isValidPeerId(peerId) || !isValidResumeToken(resumeToken)))
+          (!isValidPeerId(peerId) || !isValidResumeToken(resumeToken))) ||
+        !roomSettings
       ) {
         clearActiveSession();
         return null;
@@ -358,7 +389,7 @@
       const reservedMembers =
         mode === "create" && Array.isArray(saved.reservedMembers)
           ? saved.reservedMembers
-              .slice(0, CONFIG.maxParticipants - 1)
+              .slice(0, roomSettings.capacity - 1)
               .map((reservation) => {
                 const member = parseMember(reservation?.member);
                 const token = isValidResumeToken(reservation?.resumeToken)
@@ -376,7 +407,11 @@
         displayName,
         peerId,
         resumeToken,
+        roomName: roomSettings.name,
+        roomCapacity: roomSettings.capacity,
+        guestsCanSpeak: roomSettings.guestsCanSpeak,
         listener: Boolean(saved.listener),
+        restoreMicrophone: Boolean(saved.restoreMicrophone ?? !saved.listener),
         muted: Boolean(saved.muted),
         selectedAudioInputId:
           typeof saved.selectedAudioInputId === "string"
@@ -387,6 +422,12 @@
         chatMessages,
         chatSequence,
         reservedMembers,
+        blockedResumeTokens:
+          mode === "create" && Array.isArray(saved.blockedResumeTokens)
+            ? saved.blockedResumeTokens
+                .filter(isValidResumeToken)
+                .slice(0, CONFIG.maxParticipants * 2)
+            : [],
       };
     } catch (_) {
       clearActiveSession();
@@ -398,14 +439,18 @@
     if (!state.joined || state.leaving || state.pageHiding) return;
     try {
       const snapshot = {
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         mode: state.isHost ? "create" : "join",
         roomCode: state.roomCode,
         displayName: state.displayName,
+        room: serializeRoomSettings(),
         peerId: state.selfPeerId,
         resumeToken: state.resumeToken,
-        listener: !state.microphoneGranted,
+        listener: getLocalListenerState(),
+        restoreMicrophone: Boolean(
+          state.microphoneGranted || state.enteredWithMicrophone,
+        ),
         muted: state.muted,
         selectedAudioInputId: state.selectedAudioInputId,
         voiceSettings: serializeVoiceSettings(state.voiceSettings),
@@ -420,9 +465,14 @@
                 member: serializeMember(member),
                 resumeToken: state.memberResumeTokens.get(member.peerId) || "",
               }))
-              .filter((reservation) =>
-                isValidResumeToken(reservation.resumeToken),
+              .filter(
+                (reservation) =>
+                  isValidResumeToken(reservation.resumeToken) &&
+                  !state.blockedResumeTokens.has(reservation.resumeToken),
               )
+          : [],
+        blockedResumeTokens: state.isHost
+          ? Array.from(state.blockedResumeTokens)
           : [],
       };
       sessionStorage.setItem(CONFIG.activeSessionKey, JSON.stringify(snapshot));
@@ -444,6 +494,10 @@
     state.mode = saved.mode;
     state.roomCode = saved.roomCode;
     state.displayName = saved.displayName;
+    state.roomName = saved.roomName;
+    state.roomCapacity = saved.roomCapacity;
+    state.guestsCanSpeak = saved.guestsCanSpeak;
+    state.blockedResumeTokens = new Set(saved.blockedResumeTokens || []);
     state.resumePeerId = saved.peerId;
     state.resumeToken = saved.resumeToken || generateResumeToken();
     state.isHost = saved.mode === "create";
@@ -467,7 +521,7 @@
     syncVoiceEqualizerUI();
     setConnectionStatus("connecting", "Restaurando…");
     showScreen("room");
-    document.title = `Sala ${formatRoomCode(state.roomCode)} — Cloak`;
+    document.title = `${state.roomName} — Cloak`;
 
     const deadline = Date.now() + CONFIG.restoreRetryWindow;
     let lastError = null;
@@ -495,11 +549,22 @@
         }
         state.restoring = false;
         saveActiveSession();
-        if (!saved.listener) void restoreMicrophoneAfterReconnect(saved);
+        if (saved.restoreMicrophone)
+          void restoreMicrophoneAfterReconnect(saved);
         return;
       } catch (error) {
         if (!state.restoring) {
           closeNetworkConnections(true);
+          return;
+        }
+        if (error?.code === "removed" || error?.type === "removed") {
+          state.restoring = false;
+          clearActiveSession();
+          closeNetworkConnections(true);
+          resetPermissionUI();
+          resetSessionIdentity();
+          showScreen("home");
+          showToast("Você foi removido pelo anfitrião.", "error");
           return;
         }
         lastError = error;
@@ -508,6 +573,10 @@
         state.mode = saved.mode;
         state.roomCode = saved.roomCode;
         state.displayName = saved.displayName;
+        state.roomName = saved.roomName;
+        state.roomCapacity = saved.roomCapacity;
+        state.guestsCanSpeak = saved.guestsCanSpeak;
+        state.blockedResumeTokens = new Set(saved.blockedResumeTokens || []);
         state.resumePeerId = saved.peerId;
         state.isHost = saved.mode === "create";
         state.hostPeerId = roomPeerId(saved.roomCode);
@@ -679,8 +748,8 @@
     syncVoiceEqualizerUI();
     const self = state.participants.get(state.selfPeerId);
     if (self) {
-      self.listener = !state.microphoneGranted;
-      self.muted = state.muted;
+      self.listener = getLocalListenerState();
+      self.muted = self.listener ? true : state.muted;
       renderParticipants();
       sendLocalMemberState();
     }
@@ -747,6 +816,12 @@
       clearFieldError(dom.displayName, dom.nameError);
     });
 
+    dom.createRoomName.addEventListener("input", () => {
+      updateCreateRoomNameCounter();
+      clearFieldError(dom.createRoomName, dom.createRoomNameError);
+      dom.createRoomStatus.textContent = "";
+    });
+
     dom.roomCode.addEventListener("input", () => {
       const normalized = extractRoomCodeInput(dom.roomCode.value);
       dom.roomCode.value = formatRoomCode(normalized);
@@ -754,6 +829,9 @@
     });
 
     dom.createRoomButton.addEventListener("click", prepareCreateRoom);
+    dom.createRoomForm.addEventListener("submit", confirmCreateRoom);
+    dom.createRoomClose.addEventListener("click", closeCreateRoomDialog);
+    dom.cancelCreateRoom.addEventListener("click", closeCreateRoomDialog);
     dom.homeForm.addEventListener("submit", prepareJoinRoom);
     dom.permissionBackButton.addEventListener(
       "click",
@@ -796,6 +874,14 @@
       "input",
       handleParticipantOutputInput,
     );
+    dom.removeParticipantDialog.addEventListener("close", () => {
+      const peerId = state.pendingRemovalPeerId;
+      state.pendingRemovalPeerId = "";
+      if (dom.removeParticipantDialog.returnValue === "confirm" && peerId) {
+        kickParticipant(peerId);
+        requestAnimationFrame(() => dom.participantsGrid.focus());
+      }
+    });
     dom.participantsGrid.addEventListener(
       "click",
       handleParticipantOutputClick,
@@ -878,11 +964,69 @@
 
   function prepareCreateRoom() {
     if (!validateName()) return;
+    const displayName = sanitizeName(dom.displayName.value);
+    if (!sanitizeRoomName(dom.createRoomName.value)) {
+      dom.createRoomName.value = `Sala de ${displayName}`.slice(
+        0,
+        CONFIG.maxRoomNameLength,
+      );
+    }
+    updateCreateRoomNameCounter();
+    clearFieldError(dom.createRoomName, dom.createRoomNameError);
+    dom.createRoomStatus.textContent = "";
+    if (typeof dom.createRoomDialog.showModal === "function") {
+      dom.createRoomDialog.showModal();
+      requestAnimationFrame(() => dom.createRoomName.focus());
+    } else {
+      dom.createRoomDialog.setAttribute("open", "");
+      dom.createRoomName.focus();
+    }
+  }
+
+  function closeCreateRoomDialog() {
+    if (typeof dom.createRoomDialog.close === "function") {
+      dom.createRoomDialog.close();
+    } else {
+      dom.createRoomDialog.removeAttribute("open");
+    }
+    dom.createRoomButton.focus();
+  }
+
+  function confirmCreateRoom(event) {
+    event.preventDefault();
+    const roomName = sanitizeRoomName(dom.createRoomName.value);
+    const selectedCapacity = dom.createRoomForm.querySelector(
+      'input[name="roomCapacity"]:checked',
+    );
+    const roomCapacity = normalizeRoomCapacity(selectedCapacity?.value);
+    if (roomName.length < 2 || roomName.length > CONFIG.maxRoomNameLength) {
+      setFieldError(
+        dom.createRoomName,
+        dom.createRoomNameError,
+        "Digite um nome para a sala entre 2 e 40 caracteres.",
+      );
+      dom.createRoomName.focus();
+      return;
+    }
+    if (!roomCapacity) {
+      dom.createRoomStatus.textContent =
+        "Escolha um limite válido de participantes.";
+      return;
+    }
 
     state.mode = "create";
     state.displayName = sanitizeName(dom.displayName.value);
+    state.roomName = roomName;
+    state.roomCapacity = roomCapacity;
+    state.guestsCanSpeak = Boolean(dom.allowParticipantVoice.checked);
+    state.blockedResumeTokens.clear();
     state.roomCode = generateRoomCode();
     state.resumeToken = generateResumeToken();
+    if (typeof dom.createRoomDialog.close === "function") {
+      dom.createRoomDialog.close();
+    } else {
+      dom.createRoomDialog.removeAttribute("open");
+    }
     preparePermissionScreen();
   }
 
@@ -894,6 +1038,9 @@
 
     state.mode = "join";
     state.displayName = sanitizeName(dom.displayName.value);
+    state.roomName = "Sala de voz";
+    state.roomCapacity = CONFIG.defaultRoomCapacity;
+    state.guestsCanSpeak = true;
     state.roomCode = extractRoomCodeInput(dom.roomCode.value);
     state.resumeToken = generateResumeToken();
     preparePermissionScreen();
@@ -955,6 +1102,10 @@
 
   function updateNameCounter() {
     dom.nameCounter.textContent = `${Array.from(dom.displayName.value).length}/24`;
+  }
+
+  function updateCreateRoomNameCounter() {
+    dom.createRoomNameCounter.textContent = `${Array.from(dom.createRoomName.value).length}/${CONFIG.maxRoomNameLength}`;
   }
 
   async function requestMicrophone() {
@@ -1169,8 +1320,8 @@
 
       const self = state.participants.get(state.selfPeerId);
       if (self) {
-        self.listener = false;
-        self.muted = state.muted;
+        self.listener = getLocalListenerState();
+        self.muted = self.listener ? true : state.muted;
         updateMuteControl();
         renderParticipants();
         sendLocalMemberState();
@@ -1241,9 +1392,7 @@
       }
       const self = state.participants.get(state.selfPeerId);
       if (self) {
-        self.listener = rollbackTrack
-          ? previousMemberState?.listener || false
-          : true;
+        self.listener = rollbackTrack ? getLocalListenerState() : true;
         self.muted = rollbackTrack ? previousMemberState?.muted || false : true;
         updateMuteControl();
         renderParticipants();
@@ -1397,7 +1546,9 @@
   }
 
   function updateAudioInputSelectorState() {
+    const voiceBlocked = !isLocalVoiceAllowed();
     const disabled =
+      voiceBlocked ||
       !state.enteredWithMicrophone ||
       state.switchingMicrophone ||
       !state.audioInputDevices.length;
@@ -1406,7 +1557,9 @@
 
     if (!state.enteredWithMicrophone) {
       setAudioInputStatus(
-        "Você entrou apenas para ouvir. Nenhum microfone está ativo.",
+        voiceBlocked
+          ? "O anfitrião desativou o microfone dos participantes nesta sala."
+          : "Você entrou apenas para ouvir. Nenhum microfone está ativo.",
       );
     }
 
@@ -1548,7 +1701,7 @@
           peerId: peer.id,
           name: state.displayName,
           muted: state.muted,
-          listener: !state.microphoneGranted,
+          listener: getLocalListenerState(),
           host: true,
         });
 
@@ -1593,7 +1746,9 @@
     setupGuestControlConnection(connection);
 
     const response = await requestRoomAdmission(connection);
-    const members = parseMemberList(response.members);
+    applyRoomSettings(response.room);
+    enforceGuestVoicePolicy();
+    const members = parseMemberList(response.members, state.roomCapacity);
 
     if (
       !members.some(
@@ -1619,13 +1774,30 @@
     state.participants.set(state.selfPeerId, {
       peerId: state.selfPeerId,
       name: state.displayName,
-      muted: state.muted,
-      listener: !state.microphoneGranted,
+      muted: getLocalListenerState() ? true : state.muted,
+      listener: getLocalListenerState(),
       host: false,
     });
 
     await confirmRoomReady(connection);
     state.joined = true;
+  }
+
+  function enforceGuestVoicePolicy() {
+    if (state.isHost || state.guestsCanSpeak) return;
+    stopVoiceMonitor();
+    stopPermissionMeter();
+    cancelAllMediaCapture();
+    stopSilentStream();
+    state.silentStream = createSilentStream();
+    state.localStream = state.silentStream;
+    state.microphoneGranted = false;
+    state.enteredWithMicrophone = false;
+    state.muted = true;
+    state.selectedAudioInputId = "";
+    updateMuteControl();
+    updateAudioInputSelectorState();
+    syncVoiceEqualizerUI();
   }
 
   function openPeer(id) {
@@ -1767,7 +1939,7 @@
         roomCode: state.roomCode,
         name: state.displayName,
         muted: state.muted,
-        listener: !state.microphoneGranted,
+        listener: getLocalListenerState(),
         resumeToken: state.resumeToken,
       });
     });
@@ -1951,11 +2123,16 @@
       const expectedResumeToken = state.memberResumeTokens.get(connection.peer);
       const isResume = Boolean(
         existingMember &&
-        !existingMember.host &&
-        !existingConnection &&
-        expectedResumeToken &&
-        resumeToken === expectedResumeToken,
+          !existingMember.host &&
+          !existingConnection &&
+          expectedResumeToken &&
+          resumeToken === expectedResumeToken,
       );
+
+      if (state.blockedResumeTokens.has(resumeToken)) {
+        reject("removed", "Você foi removido desta sala.");
+        return;
+      }
 
       if (
         state.pendingMembers.has(connection.peer) ||
@@ -1968,7 +2145,7 @@
       if (
         !isResume &&
         state.participants.size + state.pendingMembers.size >=
-          CONFIG.maxParticipants
+          state.roomCapacity
       ) {
         reject("room-full", "A sala já está cheia.");
         return;
@@ -1986,11 +2163,12 @@
       }
 
       clearJoinTimer();
+      const listener = !state.guestsCanSpeak || Boolean(message.listener);
       const member = {
         peerId: connection.peer,
         name,
-        muted: Boolean(message.muted),
-        listener: Boolean(message.listener),
+        muted: listener ? true : Boolean(message.muted),
+        listener,
         host: false,
       };
 
@@ -2010,7 +2188,7 @@
         type: "accepted",
         version: CONFIG.protocolVersion,
         roomCode: state.roomCode,
-        maxParticipants: CONFIG.maxParticipants,
+        room: serializeRoomSettings(),
         members: Array.from(state.participants.values()).map(serializeMember),
       });
       return;
@@ -2084,8 +2262,9 @@
     if (message.type === "state") {
       const member = state.participants.get(connection.peer);
       if (!member) return;
-      member.muted = Boolean(message.muted);
-      member.listener = Boolean(message.listener);
+      member.listener = !state.guestsCanSpeak || Boolean(message.listener);
+      member.muted = member.listener ? true : Boolean(message.muted);
+      applyParticipantVoiceGate(member.peerId);
       broadcastControl({
         type: "member-state",
         version: CONFIG.protocolVersion,
@@ -2209,7 +2388,9 @@
         state.hostConnection = connection;
         setupGuestControlConnection(connection);
         const response = await requestRoomAdmission(connection);
-        const members = parseMemberList(response.members);
+        applyRoomSettings(response.room);
+        enforceGuestVoicePolicy();
+        const members = parseMemberList(response.members, state.roomCapacity);
         if (
           !members.some(
             (member) => member.peerId === state.hostPeerId && member.host,
@@ -2235,8 +2416,8 @@
           host: false,
         };
         self.name = state.displayName;
-        self.muted = state.muted;
-        self.listener = !state.microphoneGranted;
+        self.listener = getLocalListenerState();
+        self.muted = self.listener ? true : state.muted;
         self.host = false;
         state.participants.set(state.selfPeerId, self);
 
@@ -2253,12 +2434,17 @@
         updateChatComposer();
         saveActiveSession();
         showToast("Você voltou à sala.");
-      } catch (_) {
+      } catch (error) {
         if (state.hostConnection === connection) state.hostConnection = null;
         try {
           connection?.close();
         } catch (_) {
           // A tentativa já pode estar fechada.
+        }
+        if (error?.code === "removed" || error?.type === "removed") {
+          state.guestReconnecting = false;
+          remoteRoomClosed("Você foi removido pelo anfitrião.");
+          return;
         }
         if (
           generation !== state.guestReconnectGeneration ||
@@ -2311,6 +2497,11 @@
       return;
     }
 
+    if (message.type === "removed") {
+      remoteRoomClosed("Você foi removido pelo anfitrião.");
+      return;
+    }
+
     if (!state.joined) return;
 
     if (message.type === "chat-history") {
@@ -2344,7 +2535,7 @@
     }
 
     if (message.type === "initiate-calls" && Array.isArray(message.peerIds)) {
-      message.peerIds.slice(0, CONFIG.maxParticipants).forEach((peerId) => {
+      message.peerIds.slice(0, state.roomCapacity).forEach((peerId) => {
         if (isValidPeerId(peerId) && state.participants.has(peerId)) {
           window.setTimeout(() => placeMediaCall(peerId), 80);
         }
@@ -2357,11 +2548,18 @@
       return;
     }
 
+    if (message.type === "member-removed" && isValidPeerId(message.peerId)) {
+      removeGuestMember(message.peerId, false);
+      showToast("Um participante foi removido pelo anfitrião.");
+      return;
+    }
+
     if (message.type === "member-state" && isValidPeerId(message.peerId)) {
       const member = state.participants.get(message.peerId);
       if (!member) return;
       member.muted = Boolean(message.muted);
       member.listener = Boolean(message.listener);
+      applyParticipantVoiceGate(member.peerId);
       renderParticipants();
       return;
     }
@@ -2371,7 +2569,7 @@
     }
   }
 
-  function removeHostMember(peerId, announce) {
+  function removeHostMember(peerId, announce, reason = "left") {
     const member = state.participants.get(peerId);
     if (!member || peerId === state.selfPeerId) return;
 
@@ -2397,6 +2595,8 @@
         peerId,
       });
       showToast(`${member.name} saiu da sala.`);
+    } else if (reason === "removed") {
+      showToast(`${member.name} foi removido da sala.`);
     }
 
     renderParticipants();
@@ -2445,7 +2645,8 @@
       if (
         member.peerId === state.selfPeerId ||
         state.participants.has(member.peerId) ||
-        !isValidResumeToken(resumeToken)
+        !isValidResumeToken(resumeToken) ||
+        state.blockedResumeTokens.has(resumeToken)
       ) {
         return;
       }
@@ -2601,7 +2802,7 @@
 
   function sendChatHistory(connection) {
     const batches = [];
-    for (let index = 0; index < state.chatMessages.length;) {
+    for (let index = 0; index < state.chatMessages.length; ) {
       const end = index + CONFIG.chatHistoryBatchSize;
       batches.push(
         state.chatMessages.slice(index, end).map(serializeChatMessage),
@@ -2887,15 +3088,6 @@
   }
 
   function handleEmojiSelection(event) {
-    const systemButton = event.target.closest("button[data-system-emoji]");
-    if (systemButton && dom.emojiPicker.contains(systemButton)) {
-      closeEmojiPicker();
-      dom.chatInput.focus();
-      setChatStatus(
-        "Pressione Win + V ou Win + . e escolha qualquer emoji do Windows.",
-      );
-      return;
-    }
     const button = event.target.closest("button[data-emoji]");
     if (!button || !dom.emojiPicker.contains(button)) return;
     insertEmoji(button.dataset.emoji || "");
@@ -3005,7 +3197,7 @@
       (total, calls) => total + calls.length,
       0,
     );
-    if (pendingCount >= CONFIG.maxParticipants * 2) {
+    if (pendingCount >= state.roomCapacity * 2) {
       safeCloseCall(call);
       return;
     }
@@ -3057,7 +3249,8 @@
       !state.peer ||
       !state.participants.has(peerId) ||
       peerId === state.selfPeerId ||
-      state.mediaCalls.has(peerId)
+      state.mediaCalls.has(peerId) ||
+      getLocalListenerState()
     ) {
       return;
     }
@@ -3117,6 +3310,7 @@
     applyParticipantOutputSettings(peerId, audio);
     dom.remoteAudioContainer.appendChild(audio);
     state.remoteAudios.set(peerId, audio);
+    applyParticipantVoiceGate(peerId, audio);
     addRemoteAnalysisNode(call, audio, stream);
 
     try {
@@ -3129,6 +3323,20 @@
         dom.enableAudioButton.hidden = false;
       }
     }
+  }
+
+  function applyParticipantVoiceGate(
+    peerId,
+    audio = state.remoteAudios.get(peerId),
+  ) {
+    if (!audio) return;
+    const member = state.participants.get(peerId);
+    const locallyMuted = Boolean(
+      state.participantOutputSettings.get(peerId)?.muted,
+    );
+    audio.muted = !member || member.listener || locallyMuted;
+    if (member && !member.listener && !audio.muted)
+      playParticipantOutput(peerId);
   }
 
   async function addRemoteAnalysisNode(call, audio, stream) {
@@ -3212,7 +3420,7 @@
     }
     syncVoiceEqualizerUI();
 
-    document.title = `Sala ${formatRoomCode(state.roomCode)} — Cloak`;
+    document.title = `${state.roomName} — Cloak`;
     showToast(
       restored
         ? "Sala recuperada após a atualização."
@@ -3225,11 +3433,16 @@
 
   function updateRoomDetails() {
     const formatted = formatRoomCode(state.roomCode);
-    const host = state.participants.get(state.hostPeerId);
     dom.sidebarRoomCode.textContent = formatted;
-    dom.roomTitle.textContent = state.isHost
+    dom.roomKicker.textContent = state.isHost
       ? "Sua sala"
-      : `Sala de ${host?.name || "voz"}`;
+      : "Sala compartilhada";
+    dom.roomTitle.textContent = state.roomName || "Sala de voz";
+    dom.roomCapacitySummary.textContent = `${state.roomCapacity} lugares`;
+    dom.roomVoicePolicySummary.textContent = state.guestsCanSpeak
+      ? "Participantes podem falar"
+      : "Somente o anfitrião pode falar";
+    dom.capacityLimit.textContent = String(state.roomCapacity);
   }
 
   function normalizeOutputVolume(value) {
@@ -3254,7 +3467,7 @@
     if (!audio) return;
     const settings = getParticipantOutputSettings(peerId);
     audio.volume = Math.min(1, Math.max(0, settings.volume / 100));
-    audio.muted = settings.muted;
+    applyParticipantVoiceGate(peerId, audio);
   }
 
   function handleParticipantOutputInput(event) {
@@ -3280,6 +3493,11 @@
   }
 
   function handleParticipantOutputClick(event) {
+    const removeButton = event.target.closest(".participant-remove-button");
+    if (removeButton && dom.participantsGrid.contains(removeButton)) {
+      openRemoveParticipantDialog(removeButton.dataset.peerId || "");
+      return;
+    }
     const button = event.target.closest(".participant-mute-button");
     if (!button || !dom.participantsGrid.contains(button)) return;
     const peerId = button.dataset.peerId || "";
@@ -3288,7 +3506,7 @@
 
     const settings = getParticipantOutputSettings(peerId);
     settings.muted = !settings.muted;
-    applyParticipantOutputSettings(peerId);
+    applyParticipantVoiceGate(peerId);
     const card = button.closest(".participant-card");
     card?.classList.toggle("is-locally-muted", settings.muted);
     syncParticipantOutputControls(button.parentElement, member, settings);
@@ -3304,6 +3522,53 @@
         ? `${member.name} foi silenciado somente para você.`
         : `Você voltou a ouvir ${member.name}.`,
     );
+  }
+
+  function openRemoveParticipantDialog(peerId) {
+    const member = state.participants.get(peerId);
+    if (
+      !state.isHost ||
+      !member ||
+      member.host ||
+      peerId === state.selfPeerId
+    ) {
+      return;
+    }
+    state.pendingRemovalPeerId = peerId;
+    dom.removeParticipantDescription.textContent = `${member.name} será desconectado desta sala. O chat continuará disponível para as outras pessoas.`;
+    if (typeof dom.removeParticipantDialog.showModal === "function") {
+      dom.removeParticipantDialog.returnValue = "cancel";
+      dom.removeParticipantDialog.showModal();
+    } else if (window.confirm(`Remover ${member.name} da sala?`)) {
+      state.pendingRemovalPeerId = "";
+      kickParticipant(peerId);
+    }
+  }
+
+  function kickParticipant(peerId) {
+    const member = state.participants.get(peerId);
+    if (!state.isHost || !state.joined || !member || member.host) return;
+    const token = state.memberResumeTokens.get(peerId);
+    if (isValidResumeToken(token)) state.blockedResumeTokens.add(token);
+    const connection = state.controlConnections.get(peerId);
+    sendControl(connection, {
+      type: "removed",
+      version: CONFIG.protocolVersion,
+      roomCode: state.roomCode,
+    });
+    broadcastControl(
+      {
+        type: "member-removed",
+        version: CONFIG.protocolVersion,
+        roomCode: state.roomCode,
+        peerId,
+      },
+      peerId,
+    );
+    saveActiveSession();
+    window.setTimeout(() => {
+      removeHostMember(peerId, false, "removed");
+    }, 180);
   }
 
   function playParticipantOutput(peerId) {
@@ -3354,6 +3619,7 @@
     });
     dom.participantCount.textContent = String(members.length);
     dom.capacityCount.textContent = String(members.length);
+    dom.capacityLimit.textContent = String(state.roomCapacity);
     dom.waitingCard.hidden = members.length !== 1;
   }
 
@@ -3401,6 +3667,8 @@
     card.classList.toggle("is-speaking", isSpeaking);
     card.classList.toggle("is-muted", member.muted || member.listener);
     card.classList.toggle("has-output-controls", !isSelf && !member.listener);
+    const canRemove = state.isHost && !isSelf && !member.host;
+    card.classList.toggle("has-remove-control", canRemove);
     card.classList.toggle("is-locally-muted", Boolean(settings?.muted));
     card.setAttribute("aria-labelledby", `${card.id}-name`);
     card.removeAttribute("aria-label");
@@ -3420,6 +3688,8 @@
     if (member.host) nameRow.appendChild(createBadge("Anfitrião", "host"));
     card.querySelector(".participant-state").textContent =
       participantStatusText(member, isSpeaking);
+
+    syncParticipantRemoveControl(card, member, canRemove);
 
     const currentOutput = card.querySelector(
       ".participant-output-controls, .participant-output-unavailable",
@@ -3441,6 +3711,30 @@
       card.appendChild(controls);
     }
     syncParticipantOutputControls(controls, member, settings);
+  }
+
+  function syncParticipantRemoveControl(card, member, canRemove) {
+    let button = card.querySelector(".participant-remove-button");
+    if (!canRemove) {
+      button?.remove();
+      return;
+    }
+    if (!button) {
+      button = document.createElement("button");
+      button.className = "participant-remove-button";
+      button.type = "button";
+      const icon = document.createElement("img");
+      icon.src = "src/icons/exit.png";
+      icon.alt = "";
+      icon.width = 17;
+      icon.height = 17;
+      icon.setAttribute("aria-hidden", "true");
+      button.appendChild(icon);
+      card.appendChild(button);
+    }
+    button.dataset.peerId = member.peerId;
+    button.setAttribute("aria-label", `Remover ${member.name} da sala`);
+    button.title = `Remover ${member.name} da sala`;
   }
 
   function createParticipantOutputControls(member) {
@@ -3528,6 +3822,13 @@
   }
 
   function toggleMute() {
+    if (!isLocalVoiceAllowed()) {
+      showToast(
+        "O anfitrião definiu esta sala apenas para ouvir. Seu microfone não será enviado.",
+        "error",
+      );
+      return;
+    }
     const track = state.localStream?.getAudioTracks()[0];
     if (!track || !state.microphoneGranted) {
       showToast(
@@ -3554,7 +3855,8 @@
   }
 
   function updateMuteControl() {
-    const listener = !state.microphoneGranted;
+    const voiceBlocked = !isLocalVoiceAllowed();
+    const listener = getLocalListenerState();
     const microphoneEnabled = !listener && !state.muted;
     dom.muteButton.classList.toggle("is-muted", state.muted && !listener);
     dom.muteButton.classList.toggle("is-listener", listener);
@@ -3563,14 +3865,18 @@
       ? ICON_PATHS.microphoneOn
       : ICON_PATHS.microphoneOff;
     dom.muteButtonLabel.textContent = listener
-      ? "Só ouvindo"
+      ? voiceBlocked
+        ? "Voz bloqueada"
+        : "Só ouvindo"
       : state.muted
         ? "Ativar"
         : "Silenciar";
     dom.muteButton.setAttribute(
       "aria-label",
       listener
-        ? "Você entrou sem microfone"
+        ? voiceBlocked
+          ? "O anfitrião não permitiu microfone aos participantes"
+          : "Você entrou sem microfone"
         : state.muted
           ? "Ativar microfone"
           : "Silenciar microfone",
@@ -3579,11 +3885,14 @@
       "aria-pressed",
       String(!listener && state.muted),
     );
+    dom.muteButton.disabled = voiceBlocked;
   }
 
   function sendLocalMemberState() {
     const self = state.participants.get(state.selfPeerId);
     if (!self) return;
+    self.listener = getLocalListenerState();
+    self.muted = self.listener ? true : state.muted;
 
     if (state.isHost) {
       broadcastControl({
@@ -3990,6 +4299,7 @@
   }
 
   function getPreferredVoiceTrack() {
+    if (!isLocalVoiceAllowed()) return null;
     const engine = state.voiceEngine;
     const processedTrack = engine?.outputTrack;
     const rawTrack = state.localStream?.getAudioTracks()[0];
@@ -4001,9 +4311,11 @@
   }
 
   function syncLocalAudioGates() {
+    const voiceAllowed = isLocalVoiceAllowed();
     const rawTrack = state.localStream?.getAudioTracks()[0];
     if (rawTrack?.readyState === "live") {
-      rawTrack.enabled = !state.muted || state.voiceMonitoring;
+      rawTrack.enabled =
+        (voiceAllowed && !state.muted) || state.voiceMonitoring;
     }
     const engine = state.voiceEngine;
     if (!engine) return;
@@ -4012,10 +4324,10 @@
         ?.getAudioTracks()
         .some((track) => track.readyState === "live"),
     );
-    engine.outputTrack.enabled = hasInput && !state.muted;
+    engine.outputTrack.enabled = hasInput && voiceAllowed && !state.muted;
     fadeAudioParam(
       engine.outboundGain.gain,
-      hasInput && !state.muted ? 1 : 0,
+      hasInput && voiceAllowed && !state.muted ? 1 : 0,
       0.006,
     );
     fadeAudioParam(
@@ -4026,7 +4338,7 @@
   }
 
   async function publishCurrentVoiceTrackToCalls() {
-    const track = getPreferredVoiceTrack();
+    const track = getOutboundStream().getAudioTracks()[0];
     if (!track || !state.joined || state.leaving) return false;
     let published = true;
     await Promise.allSettled(
@@ -4666,6 +4978,9 @@
     state.mode = null;
     state.roomCode = "";
     state.displayName = "";
+    state.roomName = "";
+    state.roomCapacity = CONFIG.defaultRoomCapacity;
+    state.guestsCanSpeak = true;
     state.isHost = false;
     state.leaving = false;
     state.microphoneGranted = false;
@@ -4678,6 +4993,8 @@
     state.restoring = false;
     state.resumePeerId = "";
     state.resumeToken = "";
+    state.blockedResumeTokens.clear();
+    state.pendingRemovalPeerId = "";
     state.pageHiding = false;
     state.voiceMonitoring = false;
     state.voicePreparing = false;
@@ -4726,11 +5043,12 @@
 
   function setupGuestRejectedMessage(reason) {
     const messages = {
-      "room-full": "A sala está cheia. O limite é de 6 pessoas.",
+      "room-full": "A sala atingiu o limite definido pelo anfitrião.",
       "invalid-room": "O convite não pertence a esta sala.",
       duplicate: "Você já está conectado a esta sala.",
       "join-timeout": "A entrada não foi concluída a tempo.",
       "invalid-member": "O nome ou os dados de entrada são inválidos.",
+      removed: "Você foi removido pelo anfitrião.",
     };
     return messages[reason] || "A entrada na sala foi recusada.";
   }
@@ -4740,7 +5058,9 @@
     if (code === "room-not-found" || code === "peer-unavailable") {
       return "Não encontramos essa sala. Confira o código e veja se quem criou ainda está conectado.";
     }
-    if (code === "room-full") return setupGuestRejectedMessage(code);
+    if (code === "room-full")
+      return error?.message || setupGuestRejectedMessage(code);
+    if (code === "removed") return setupGuestRejectedMessage(code);
     if (code === "unavailable-id")
       return "O código da sala já está em uso. Tente criar novamente.";
     if (code === "join-timeout" || code === "connection-timeout") {
@@ -4891,8 +5211,14 @@
     }
   }
 
-  function parseMemberList(members) {
-    if (!Array.isArray(members) || members.length > CONFIG.maxParticipants) {
+  function parseMemberList(members, expectedCapacity = state.roomCapacity) {
+    const capacity = normalizeRoomCapacity(expectedCapacity);
+    if (
+      !capacity ||
+      !Array.isArray(members) ||
+      members.length > capacity ||
+      members.length > CONFIG.maxParticipants
+    ) {
       throw createAppError(
         "invalid-room",
         "A lista de participantes é inválida.",
@@ -4900,7 +5226,8 @@
     }
 
     const parsed = members.map(parseMember).filter(Boolean);
-    if (parsed.length !== members.length) {
+    const peerIds = new Set(parsed.map((member) => member.peerId));
+    if (parsed.length !== members.length || peerIds.size !== parsed.length) {
       throw createAppError(
         "invalid-room",
         "A lista de participantes é inválida.",
@@ -5067,6 +5394,68 @@
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 24);
+  }
+
+  function sanitizeRoomName(value) {
+    return String(value || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, CONFIG.maxRoomNameLength);
+  }
+
+  function normalizeRoomCapacity(value) {
+    const capacity = Number(value);
+    return CONFIG.allowedRoomCapacities.includes(capacity) ? capacity : 0;
+  }
+
+  function parseRoomSettings(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
+    const name = sanitizeRoomName(value.name);
+    const capacity = normalizeRoomCapacity(value.capacity);
+    if (
+      name.length < 2 ||
+      !capacity ||
+      typeof value.guestsCanSpeak !== "boolean"
+    ) {
+      return null;
+    }
+    return { name, capacity, guestsCanSpeak: value.guestsCanSpeak };
+  }
+
+  function serializeRoomSettings() {
+    return {
+      name: state.roomName,
+      capacity: state.roomCapacity,
+      guestsCanSpeak: Boolean(state.guestsCanSpeak),
+    };
+  }
+
+  function applyRoomSettings(value) {
+    const settings = parseRoomSettings(value);
+    if (!settings) {
+      throw createAppError(
+        "invalid-room",
+        "As configurações da sala são inválidas.",
+      );
+    }
+    state.roomName = settings.name;
+    state.roomCapacity = settings.capacity;
+    state.guestsCanSpeak = settings.guestsCanSpeak;
+    return settings;
+  }
+
+  function isLocalVoiceAllowed() {
+    return state.isHost || state.mode === "create" || state.guestsCanSpeak;
+  }
+
+  function canLocalTransmitVoice() {
+    return isLocalVoiceAllowed() && state.microphoneGranted;
+  }
+
+  function getLocalListenerState() {
+    return !canLocalTransmitVoice();
   }
 
   function isValidPeerId(peerId) {
