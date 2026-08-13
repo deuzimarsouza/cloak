@@ -82,9 +82,13 @@
   const dom = {
     brandLink: document.querySelector("#brand-link"),
     roomControls: document.querySelector("#room-controls"),
+    roomMenuDialog: document.querySelector("#room-menu-dialog"),
+    roomMenuBody: document.querySelector(".room-menu-body"),
+    roomMenuClose: document.querySelector("#room-menu-close"),
     homeScreen: document.querySelector("#home-screen"),
     permissionScreen: document.querySelector("#permission-screen"),
     roomScreen: document.querySelector("#room-screen"),
+    roomScreenTitle: document.querySelector("#room-screen-title"),
     homeForm: document.querySelector("#home-form"),
     displayName: document.querySelector("#display-name"),
     nameCounter: document.querySelector("#name-counter"),
@@ -851,7 +855,16 @@
     });
     dom.sidebarCodeButton.addEventListener("click", copyRoomCode);
     dom.sidebarInviteButton.addEventListener("click", copyInviteLink);
-    dom.copyInviteButton.addEventListener("click", copyInviteLink);
+    dom.copyInviteButton.addEventListener("click", openRoomMenuDialog);
+    dom.roomMenuClose.addEventListener("click", closeRoomMenuDialog);
+    dom.roomMenuDialog.addEventListener("close", finishRoomMenuDialogClose);
+    dom.roomMenuDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeRoomMenuDialog();
+    });
+    dom.roomMenuDialog.addEventListener("click", (event) => {
+      if (event.target === dom.roomMenuDialog) closeRoomMenuDialog();
+    });
     dom.muteButton.addEventListener("click", toggleMute);
     dom.voiceEqualizerButton.addEventListener("click", openVoiceEqualizer);
     dom.equalizerCloseButton.addEventListener("click", () =>
@@ -3530,6 +3543,7 @@
       ? "Sua sala"
       : "Sala compartilhada";
     dom.roomTitle.textContent = state.roomName || "Sala de voz";
+    dom.roomScreenTitle.textContent = state.roomName || "Sala de voz";
     dom.roomCapacitySummary.textContent = `${state.roomCapacity} lugares`;
     dom.roomVoicePolicySummary.textContent = state.guestsCanSpeak
       ? "Participantes podem falar"
@@ -5206,11 +5220,68 @@
     return messages[error?.type] || "Houve um problema na conexão de áudio.";
   }
 
+  function openRoomMenuDialog() {
+    if (
+      dom.copyInviteButton.hidden ||
+      dom.roomScreen.hidden ||
+      dom.roomMenuDialog.open
+    ) {
+      return;
+    }
+
+    dom.copyInviteButton.setAttribute("aria-expanded", "true");
+    try {
+      if (typeof dom.roomMenuDialog.showModal === "function") {
+        dom.roomMenuDialog.showModal();
+      } else {
+        dom.roomMenuDialog.setAttribute("open", "");
+      }
+    } catch (_) {
+      dom.roomMenuDialog.setAttribute("open", "");
+    }
+
+    requestAnimationFrame(() => {
+      dom.roomMenuBody.scrollTop = 0;
+      dom.roomMenuClose.focus({ preventScroll: true });
+    });
+  }
+
+  function closeRoomMenuDialog() {
+    if (!dom.roomMenuDialog.open && !dom.roomMenuDialog.hasAttribute("open")) {
+      return;
+    }
+    if (typeof dom.roomMenuDialog.close === "function") {
+      dom.roomMenuDialog.close();
+      return;
+    }
+    dom.roomMenuDialog.removeAttribute("open");
+    finishRoomMenuDialogClose();
+  }
+
+  function finishRoomMenuDialogClose() {
+    dom.copyInviteButton.setAttribute("aria-expanded", "false");
+    if (!dom.copyInviteButton.hidden && !dom.roomScreen.hidden) {
+      requestAnimationFrame(() =>
+        dom.copyInviteButton.focus({ preventScroll: true }),
+      );
+    }
+  }
+
   function showScreen(name) {
+    const showingRoom = name === "room";
     dom.homeScreen.hidden = name !== "home";
     dom.permissionScreen.hidden = name !== "permission";
-    dom.roomScreen.hidden = name !== "room";
-    dom.roomControls.hidden = name !== "room";
+    dom.roomScreen.hidden = !showingRoom;
+    dom.roomControls.hidden = !showingRoom;
+    dom.copyInviteButton.hidden = !showingRoom;
+    document.body.classList.toggle("room-active", showingRoom);
+
+    if (
+      !showingRoom &&
+      (dom.roomMenuDialog.open || dom.roomMenuDialog.hasAttribute("open"))
+    ) {
+      closeRoomMenuDialog();
+    }
 
     if (name === "home") {
       requestAnimationFrame(() =>
@@ -5221,13 +5292,20 @@
         dom.permissionTitle.focus({ preventScroll: true }),
       );
     } else if (name === "room") {
-      requestAnimationFrame(() => dom.roomTitle.focus({ preventScroll: true }));
+      requestAnimationFrame(() =>
+        dom.roomScreenTitle.focus({ preventScroll: true }),
+      );
     }
   }
 
   function setConnectionStatus(status, label) {
     dom.connectionStatus.dataset.status = status;
     dom.connectionStatusText.textContent = label;
+    dom.copyInviteButton.dataset.status = status;
+    dom.copyInviteButton.setAttribute(
+      "aria-label",
+      `Abrir informações e configurações da sala. Estado: ${label}`,
+    );
   }
 
   async function copyRoomCode() {
