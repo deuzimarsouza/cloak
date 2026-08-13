@@ -2887,6 +2887,15 @@
   }
 
   function handleEmojiSelection(event) {
+    const systemButton = event.target.closest("button[data-system-emoji]");
+    if (systemButton && dom.emojiPicker.contains(systemButton)) {
+      closeEmojiPicker();
+      dom.chatInput.focus();
+      setChatStatus(
+        "Pressione Win + V ou Win + . e escolha qualquer emoji do Windows.",
+      );
+      return;
+    }
     const button = event.target.closest("button[data-emoji]");
     if (!button || !dom.emojiPicker.contains(button)) return;
     insertEmoji(button.dataset.emoji || "");

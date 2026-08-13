@@ -79,18 +79,13 @@
             aria-controls="equalizer-dialog"
           >
             <span class="control-icon" aria-hidden="true">
-              <svg
+              <img
                 class="equalizer-control-icon"
-                viewBox="0 0 24 24"
+                src="src/icons/settings-sliders.png"
+                alt=""
                 width="22"
                 height="22"
-                focusable="false"
-              >
-                <path d="M4 6h16M4 12h16M4 18h16" />
-                <circle cx="9" cy="6" r="2" />
-                <circle cx="15" cy="12" r="2" />
-                <circle cx="7" cy="18" r="2" />
-              </svg>
+              />
             </span>
             <span class="voice-effect-dot" aria-hidden="true"></span>
             <span id="voice-equalizer-label">Voz</span>
@@ -585,7 +580,7 @@
                       class="chat-icon-button"
                       type="button"
                       id="emoji-toggle-button"
-                      aria-label="Adicionar emoji"
+                      aria-label="Adicionar emoji, incluindo emojis do Windows"
                       aria-expanded="false"
                       aria-controls="emoji-picker"
                     >
@@ -685,6 +680,15 @@
                         aria-label="Foguete"
                       >
                         🚀
+                      </button>
+                      <button
+                        class="emoji-system-button"
+                        type="button"
+                        data-system-emoji
+                        aria-label="Usar qualquer emoji do teclado do Windows"
+                      >
+                        <span>Todos os emojis</span>
+                        <small>Use Win + V ou Win + .</small>
                       </button>
                     </div>
                   </div>

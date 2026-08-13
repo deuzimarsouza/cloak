@@ -1835,6 +1835,32 @@ input[aria-invalid="true"] {
   background: rgba(142, 124, 255, 0.1);
 }
 
+.emoji-picker .emoji-system-button {
+  display: flex;
+  height: auto;
+  min-height: 48px;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 7px 9px;
+  border-color: rgba(184, 173, 255, 0.12);
+  background: rgba(142, 124, 255, 0.055);
+  color: var(--muted-strong);
+  font-size: 0.68rem;
+  text-align: left;
+}
+
+.emoji-system-button span {
+  font-weight: 700;
+}
+
+.emoji-system-button small {
+  color: var(--violet-light);
+  font-size: 0.61rem;
+  white-space: nowrap;
+}
+
 .chat-input-shell {
   min-width: 0;
   overflow: hidden;
@@ -3377,14 +3403,9 @@ body {
 
 .equalizer-control-icon {
   display: block;
-  fill: var(--violet-light);
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 1.6;
-}
-
-.equalizer-control-icon circle {
-  stroke: none;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .voice-equalizer-trigger {
