@@ -8,7 +8,7 @@
     />
     <meta
       name="description"
-      content="Cloak cria salas privadas de voz no navegador, sem cadastro e sem instalar nada."
+      content="Cloak cria salas privadas de voz e compartilhamento de tela no navegador, sem cadastro e sem instalar nada."
     />
     <meta name="theme-color" content="#090b12" />
     <meta name="color-scheme" content="dark" />
@@ -16,8 +16,8 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
-    <title>Cloak — Salas de voz privadas</title>
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <title>Cloak — Voz e tela em salas privadas</title>
+    <link rel="stylesheet" href="styles.css?v=8" />
     <link
       rel="preload"
       as="image"
@@ -34,7 +34,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=7"></script>
+    <script defer src="app.js?v=8"></script>
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -51,10 +51,11 @@
           <span class="brand-mark" aria-hidden="true">C</span>
           <span>Cloak</span>
         </a>
-        <nav
+        <div
           class="room-controls"
           id="room-controls"
-          aria-label="Controles da sala"
+          role="group"
+          aria-label="Controles da chamada"
           hidden
         >
           <button class="control-button" type="button" id="mute-button">
@@ -91,6 +92,18 @@
             <span id="voice-equalizer-label">Voz</span>
           </button>
           <button
+            class="control-button screen-share-button"
+            type="button"
+            id="screen-share-button"
+            aria-label="Compartilhar uma aba, janela ou tela"
+            aria-pressed="false"
+          >
+            <span class="control-icon" aria-hidden="true">
+              <span class="screen-share-symbol"></span>
+            </span>
+            <span id="screen-share-label">Tela</span>
+          </button>
+          <button
             class="control-button control-danger"
             type="button"
             id="leave-room-button"
@@ -113,9 +126,9 @@
             id="enable-audio-button"
             hidden
           >
-            Ativar áudio recebido
+            Ativar mídia recebida
           </button>
-        </nav>
+        </div>
         <button
           class="room-menu-button"
           type="button"
@@ -152,8 +165,8 @@
                 <span>sem ruído.</span>
               </h1>
               <p class="hero-description">
-                Crie uma sala de voz em segundos, compartilhe o código e
-                converse direto do navegador. Sem cadastro, sem downloads.
+                Crie uma sala em segundos, converse por voz e compartilhe uma
+                aba ou janela direto do navegador. Sem cadastro, sem downloads.
               </p>
 
               <ul
@@ -165,7 +178,7 @@
                   <span aria-hidden="true">01</span> Acesso por código privado
                 </li>
                 <li>
-                  <span aria-hidden="true">02</span> Áudio direto entre
+                  <span aria-hidden="true">02</span> Voz e tela direto entre
                   participantes
                 </li>
                 <li>
@@ -424,10 +437,31 @@
           hidden
         >
           <h1 class="visually-hidden" id="room-screen-title" tabindex="-1">
-            Sala de voz
+            Sala de voz e tela
           </h1>
           <div class="room-shell">
             <div class="room-layout">
+              <section
+                class="screen-share-stage panel"
+                id="screen-share-stage"
+                aria-labelledby="screen-share-title"
+                hidden
+              >
+                <header class="screen-share-header">
+                  <div>
+                    <p class="eyebrow">Transmissão ao vivo</p>
+                    <h2 id="screen-share-title">Telas compartilhadas</h2>
+                  </div>
+                  <span class="screen-share-count" id="screen-share-count"
+                    >0 telas</span
+                  >
+                </header>
+                <div
+                  class="screen-share-grid"
+                  id="screen-share-grid"
+                  aria-live="polite"
+                ></div>
+              </section>
               <section
                 class="room-chat panel"
                 aria-labelledby="room-chat-title"
@@ -732,7 +766,8 @@
               </div>
               <p class="room-summary-privacy">
                 <span aria-hidden="true">◇</span>
-                O áudio não é gravado. As mensagens ficam somente nesta sessão.
+                O áudio e as telas não são gravados. As mensagens ficam somente
+                nesta sessão.
               </p>
             </header>
 

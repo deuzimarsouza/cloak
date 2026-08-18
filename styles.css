@@ -5432,6 +5432,301 @@ body {
   }
 }
 
+/* Compartilhamento de tela */
+.screen-share-symbol {
+  position: relative;
+  display: block;
+  width: 20px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.screen-share-symbol::before {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.screen-share-symbol::after {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.screen-share-button.is-sharing {
+  border-color: rgba(88, 219, 155, 0.3);
+  background: rgba(88, 219, 155, 0.12);
+  color: #8ff0bd;
+}
+
+.screen-share-button.is-sharing:hover {
+  background: rgba(88, 219, 155, 0.18);
+  color: #b5f7d4;
+}
+
+.screen-share-button[aria-busy="true"] .screen-share-symbol {
+  animation: screen-share-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes screen-share-pulse {
+  to {
+    opacity: 0.42;
+  }
+}
+
+.room-layout.has-screen-share {
+  grid-template-columns: minmax(0, 1.38fr) minmax(300px, 0.62fr);
+  grid-template-rows: minmax(0, 1.35fr) minmax(180px, 0.65fr);
+  grid-template-areas:
+    "screen voice"
+    "chat voice";
+}
+
+.screen-share-stage {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-area: screen;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.screen-share-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.screen-share-header .eyebrow {
+  margin: 0 0 3px;
+  color: var(--green);
+}
+
+.screen-share-header h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.screen-share-count {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(88, 219, 155, 0.18);
+  border-radius: 999px;
+  background: rgba(88, 219, 155, 0.08);
+  color: #94eabb;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.screen-share-grid {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  grid-auto-rows: minmax(min-content, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(184, 173, 255, 0.28) transparent;
+  scrollbar-gutter: stable;
+}
+
+.screen-share-card {
+  display: grid;
+  min-width: 0;
+  max-height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(184, 173, 255, 0.16);
+  border-radius: 14px;
+  background: #090b11;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.screen-share-card.is-local {
+  border-color: rgba(88, 219, 155, 0.25);
+}
+
+.screen-share-card-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(22, 26, 39, 0.96);
+}
+
+.screen-share-presenter {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.screen-share-presenter strong {
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-share-live-badge {
+  flex: 0 0 auto;
+  color: #77e8aa;
+  font-size: 0.61rem;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.screen-share-live-badge::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 9px rgba(88, 219, 155, 0.62);
+  content: "";
+  vertical-align: 1px;
+}
+
+.screen-share-live-badge[data-status="paused"] {
+  color: #e9c87f;
+}
+
+.screen-share-live-badge[data-status="paused"]::before {
+  background: #e4b35b;
+  box-shadow: none;
+}
+
+.screen-share-stop-button {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 111, 125, 0.25);
+  border-radius: 9px;
+  background: rgba(255, 111, 125, 0.1);
+  color: #ffabb3;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.screen-share-stop-button:hover {
+  background: rgba(255, 111, 125, 0.17);
+  color: #ffd0d4;
+}
+
+.screen-share-video-frame {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(142, 124, 255, 0.08), transparent 60%),
+    #05060a;
+}
+
+.screen-share-video-frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  background: #05060a;
+  object-fit: contain;
+}
+
+@media (max-width: 700px) {
+  .room-layout.has-screen-share {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(240px, 52dvh) minmax(260px, 1fr) minmax(180px, 0.8fr);
+    grid-template-areas:
+      "screen"
+      "chat"
+      "voice";
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(184, 173, 255, 0.28) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .room-layout.has-screen-share .screen-share-stage,
+  .room-layout.has-screen-share .room-chat,
+  .room-layout.has-screen-share .room-voice-column {
+    height: auto;
+  }
+
+  .screen-share-header {
+    padding: 9px 11px;
+  }
+
+  .screen-share-header .eyebrow {
+    display: none;
+  }
+
+  .screen-share-grid {
+    padding: 7px;
+  }
+
+  @supports selector(:has(*)) {
+    .room-shell:has(.chat-input-shell:focus-within)
+      .room-layout.has-screen-share {
+      grid-template-rows: minmax(0, 1fr);
+      grid-template-areas: "chat";
+      overflow: hidden;
+    }
+
+    .room-shell:has(.chat-input-shell:focus-within)
+      .room-layout.has-screen-share
+      .screen-share-stage {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 380px) {
+  .room-active .site-header {
+    gap: 3px;
+  }
+
+  .room-active .room-controls {
+    gap: 1px;
+    padding: 2px;
+  }
+
+  .room-active .control-button,
+  .room-active .room-menu-button {
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

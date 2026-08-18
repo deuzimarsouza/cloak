@@ -1,6 +1,6 @@
 # Cloak
 
-O Cloak é um chat de voz que funciona direto no navegador. Uma pessoa configura e cria a sala, recebe um código automático e compartilha o convite. As demais entram pelo código ou pelo link e o navegador pede autorização antes de usar o microfone.
+O Cloak é um chat de voz com compartilhamento de tela que funciona direto no navegador. Uma pessoa configura e cria a sala, recebe um código automático e compartilha o convite. As demais entram pelo código ou pelo link, e cada permissão de microfone ou tela é solicitada pelo próprio navegador.
 
 ## O que já está pronto
 
@@ -15,6 +15,8 @@ O Cloak é um chat de voz que funciona direto no navegador. Uma pessoa configura
 - teste local com retorno da própria voz e opção de salvar o ajuste como padrão;
 - opção de entrar apenas para ouvir;
 - áudio em tempo real com WebRTC;
+- compartilhamento de aba, janela ou tela com o seletor seguro do navegador;
+- prévia local, grade para vários apresentadores e encerramento pelo Cloak ou pelo botão nativo do navegador;
 - lista de participantes e indicador de quem está falando;
 - volume individual e silenciamento local de participantes;
 - chat temporário de texto e emojis dentro da sala;
@@ -32,7 +34,7 @@ O projeto não precisa de instalação ou compilação. Sirva a pasta com qualqu
 python -m http.server 8080
 ```
 
-Depois abra `http://localhost:8080`. Não abra apenas o arquivo `index.html` com dois cliques: o navegador pode limitar recursos de rede e de microfone nesse modo.
+Depois abra `http://localhost:8080`. Não abra apenas o arquivo `index.html` com dois cliques: o navegador pode limitar recursos de rede, microfone e compartilhamento de tela nesse modo.
 
 ## Publicar no GitHub Pages
 
@@ -41,19 +43,22 @@ Depois abra `http://localhost:8080`. Não abra apenas o arquivo `index.html` com
 3. Em **Build and deployment**, selecione **GitHub Actions** como fonte.
 4. O fluxo incluído em `.github/workflows/pages.yml` publicará o site automaticamente a cada envio para `main`.
 
-O endereço terá o formato `https://seu-usuario.github.io/nome-do-repositorio/`. O GitHub Pages usa HTTPS, requisito do navegador para liberar o microfone.
+O endereço terá o formato `https://seu-usuario.github.io/nome-do-repositorio/`. O GitHub Pages usa HTTPS, requisito do navegador para liberar o microfone e a captura de tela.
 
 ## Como a conexão funciona
 
-O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, o áudio trafega por WebRTC diretamente entre os participantes e não é gravado pelo Cloak. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
+O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, áudio e telas trafegam por WebRTC diretamente entre os participantes e não são gravados pelo Cloak. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
+
+Ao clicar em **Tela**, o navegador abre o seletor nativo para escolher uma aba, janela ou tela. Por segurança, o Cloak não consegue listar essas fontes nem memorizar a permissão. Uma atualização da página ou saída da sala encerra a transmissão e exige uma nova escolha do usuário.
 
 O criador da sala funciona como coordenador. Se ele atualizar a página ou perder a conexão por alguns instantes, o Cloak tenta recuperar a mesma sala durante uma janela curta. Se o anfitrião clicar em **Sair**, a sala termina imediatamente; se fechar a aba e não retornar, os convidados veem a tentativa de reconexão antes de a sala expirar. O código é a chave de acesso: compartilhe-o apenas com quem deve participar.
 
 ## Limites deste MVP
 
 - O PeerJS Cloud é um serviço público compartilhado, adequado para protótipos, sem garantia de disponibilidade para um produto comercial.
-- A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
+- A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio e a tela. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
 - A sala usa uma malha de conexões entre os navegadores. O limite lógico é de 30 pessoas, mas muitas vozes simultâneas podem sobrecarregar CPU e upload; estabilidade garantida em grupos grandes exige uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
+- Cada tela compartilhada também é enviada uma vez para cada participante. Em salas grandes, prefira resolução moderada; um produto de escala deve encaminhar vídeo por uma SFU.
 - A remoção encerra e bloqueia a reconexão automática daquela sessão. Sem contas ou backend, ela não funciona como banimento permanente: alguém com o convite pode tentar entrar novamente em uma nova sessão.
 - Não há contas, moderação persistente nem recuperação da sala após a saída definitiva do criador.
 - Nunca coloque chaves secretas ou credenciais TURN permanentes no JavaScript publicado.
@@ -70,4 +75,4 @@ voice-effects-processor.js    processamento dos efeitos de voz em tempo real
 
 ## Navegadores
 
-Use versões recentes do Chrome, Edge, Firefox ou Safari. Para testar uma conversa de verdade, abra o endereço em dois dispositivos ou em dois perfis separados do navegador para que cada participante tenha uma sessão e um microfone próprios.
+Use versões recentes do Chrome, Edge, Firefox ou Safari. A lista de abas e janelas disponíveis varia conforme o navegador e o sistema operacional; aparelhos móveis podem não oferecer captura de tela. Para testar uma conversa de verdade, abra o endereço em dois dispositivos ou em dois perfis separados do navegador para que cada participante tenha uma sessão própria.
