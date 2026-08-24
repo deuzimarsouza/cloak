@@ -1,0 +1,34 @@
+{
+  "name": "Cloak — Voz e tela em salas privadas",
+  "short_name": "Cloak",
+  "description": "Salas privadas de voz e compartilhamento de tela direto no navegador.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b12",
+  "theme_color": "#090b12",
+  "categories": ["social", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "./src/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./src/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./src/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
