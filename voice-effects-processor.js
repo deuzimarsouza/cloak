@@ -49,6 +49,13 @@ class CloakVoiceEffectsProcessor extends AudioWorkletProcessor {
         maxValue: 1.25,
         automationRate: "k-rate",
       },
+      {
+        name: "isolationAmount",
+        defaultValue: 1,
+        minValue: 0,
+        maxValue: 1,
+        automationRate: "k-rate",
+      },
     ];
   }
 
@@ -65,6 +72,40 @@ class CloakVoiceEffectsProcessor extends AudioWorkletProcessor {
     this.pitchWet = 0;
     this.mix = 1;
     this.smoothing = 1 - Math.exp(-1 / (sampleRate * 0.012));
+    this.isolationMix = 0;
+    this.isolationGain = 1;
+    this.isolationSmoothing = 1 - Math.exp(-1 / (sampleRate * 0.025));
+    this.gateAttack = 1 - Math.exp(-1 / (sampleRate * 0.0025));
+    this.gateRelease = 1 - Math.exp(-1 / (sampleRate * 0.18));
+    this.previousDetectorSample = 0;
+    this.resetNoiseProfile();
+    this.port.onmessage = (event) => {
+      if (event.data?.type === "reset-noise-profile") {
+        this.resetNoiseProfile();
+      }
+    };
+  }
+
+  resetNoiseProfile() {
+    this.noiseFloor = 0.004;
+    this.noiseWindowMinimum = Number.POSITIVE_INFINITY;
+    this.noiseWindowSamples = 0;
+    this.noiseWindowEligibleSamples = 0;
+    this.noiseWindowSpan = Math.max(128, Math.round(sampleRate * 0.75));
+    this.calibrationSamplesRemaining = Math.round(sampleRate * 0.35);
+    this.calibrationSum = 0;
+    this.calibrationBlocks = 0;
+    this.gateHoldSamples = 0;
+    this.gateHoldSpan = Math.round(sampleRate * 0.16);
+    this.gateTarget = 1;
+    this.energyEnvelopeSquared = 0;
+    this.stationaryLevel = 0;
+    this.stationaryDeviation = 0;
+    this.longTermZeroCrossingRate = 0;
+    this.stationaryStatisticsSamples = 0;
+    this.stationaryToneSamples = 0;
+    this.stationaryToneSpan = Math.round(sampleRate * 1.2);
+    this.previousDetectorSample = 0;
   }
 
   readDelay(delayInSamples) {
@@ -97,9 +138,47 @@ class CloakVoiceEffectsProcessor extends AudioWorkletProcessor {
     const driveNormalization = Math.tanh(drive) || 1;
     const mixTarget = clamp(parameters.effectMix[0] ?? 1, 0, 1);
     const outputGain = clamp(parameters.outputGain[0] ?? 0.9, 0.25, 1.25);
+    const isolationTarget = clamp(parameters.isolationAmount[0] ?? 1, 0, 1);
+
+    // O detector trabalha por bloco para não criar objetos no caminho de áudio.
+    let sumSquares = 0;
+    let zeroCrossings = 0;
+    let previousDetectorSample = this.previousDetectorSample;
+    for (let index = 0; index < frameCount; index += 1) {
+      const sample = input?.[index] || 0;
+      sumSquares += sample * sample;
+      if ((sample >= 0) !== (previousDetectorSample >= 0)) zeroCrossings += 1;
+      previousDetectorSample = sample;
+    }
+    this.previousDetectorSample = previousDetectorSample;
+    const blockRms = Math.sqrt(sumSquares / Math.max(1, frameCount));
+    const zeroCrossingRate = zeroCrossings / Math.max(1, frameCount);
+    this.updateNoiseEstimate(
+      blockRms,
+      zeroCrossingRate,
+      frameCount,
+      isolationTarget,
+    );
+    this.updateGateTarget(
+      blockRms,
+      zeroCrossingRate,
+      frameCount,
+      isolationTarget,
+    );
 
     for (let index = 0; index < frameCount; index += 1) {
-      const dry = input?.[index] || 0;
+      const raw = input?.[index] || 0;
+      this.isolationMix +=
+        (isolationTarget - this.isolationMix) * this.isolationSmoothing;
+      const gateSmoothing =
+        this.gateTarget > this.isolationGain
+          ? this.gateAttack
+          : this.gateRelease;
+      this.isolationGain +=
+        (this.gateTarget - this.isolationGain) * gateSmoothing;
+      const appliedIsolationGain =
+        1 + (this.isolationGain - 1) * this.isolationMix;
+      const dry = raw * appliedIsolationGain;
       this.ring[this.writeIndex] = dry;
 
       const phaseA = this.grainPhase;
@@ -156,6 +235,161 @@ class CloakVoiceEffectsProcessor extends AudioWorkletProcessor {
     }
 
     return true;
+  }
+
+  updateNoiseEstimate(
+    blockRms,
+    zeroCrossingRate,
+    frameCount,
+    isolationAmount,
+  ) {
+    if (isolationAmount <= 0) return;
+    const measured = clamp(blockRms, 0.00001, 0.12);
+    this.noiseWindowSamples += frameCount;
+    // Ruído amplo cruza o zero com frequência; voz tonal fica fora do aprendizado.
+    const likelyNoise = measured < 0.0035 || zeroCrossingRate >= 0.11;
+    if (likelyNoise) {
+      this.noiseWindowMinimum = Math.min(this.noiseWindowMinimum, measured);
+      this.noiseWindowEligibleSamples += frameCount;
+    }
+
+    if (this.calibrationSamplesRemaining > 0) {
+      const likelyVoicedSpeech =
+        measured >= 0.0035 && zeroCrossingRate < 0.075;
+      if (measured > 0.0002 && measured < 0.04 && !likelyVoicedSpeech) {
+        this.calibrationSum += measured;
+        this.calibrationBlocks += 1;
+      }
+      this.calibrationSamplesRemaining = Math.max(
+        0,
+        this.calibrationSamplesRemaining - frameCount,
+      );
+      if (this.calibrationSamplesRemaining === 0) {
+        if (this.calibrationBlocks > 0) {
+          this.noiseFloor = clamp(
+            this.calibrationSum / this.calibrationBlocks,
+            0.0003,
+            0.0085,
+          );
+        }
+        this.noiseWindowMinimum = Number.POSITIVE_INFINITY;
+        this.noiseWindowSamples = 0;
+        this.noiseWindowEligibleSamples = 0;
+      }
+      return;
+    }
+
+    if (this.noiseWindowSamples < this.noiseWindowSpan) return;
+    const candidate = this.noiseWindowMinimum;
+    if (Number.isFinite(candidate) && candidate < this.noiseFloor) {
+      this.noiseFloor = clamp(
+        this.noiseFloor + (candidate - this.noiseFloor) * 0.62,
+        0.0003,
+        0.0085,
+      );
+    } else if (
+      Number.isFinite(candidate) &&
+      this.noiseWindowEligibleSamples >= this.noiseWindowSpan * 0.82
+    ) {
+      this.noiseFloor = clamp(
+        this.noiseFloor + (candidate - this.noiseFloor) * 0.5,
+        0.0003,
+        0.0085,
+      );
+    }
+    this.noiseWindowMinimum = Number.POSITIVE_INFINITY;
+    this.noiseWindowSamples = 0;
+    this.noiseWindowEligibleSamples = 0;
+  }
+
+  updateGateTarget(
+    blockRms,
+    zeroCrossingRate,
+    frameCount,
+    isolationAmount,
+  ) {
+    if (isolationAmount <= 0 || this.calibrationSamplesRemaining > 0) {
+      this.gateTarget = 1;
+      this.gateHoldSamples = 0;
+      return;
+    }
+
+    const openThreshold = Math.max(
+      0.0045,
+      this.noiseFloor * (1.9 + isolationAmount * 0.25),
+    );
+    const closeThreshold = Math.max(
+      0.0028,
+      this.noiseFloor * (1.28 + isolationAmount * 0.12),
+    );
+    // Um hum baixo e realmente estável recebe atenuação leve; fala fraca não é
+    // silenciada apenas por estar abaixo do limiar principal.
+    const envelopeSmoothing =
+      1 - Math.exp(-frameCount / (sampleRate * 0.03));
+    const statisticsSmoothing =
+      1 - Math.exp(-frameCount / (sampleRate * 0.55));
+    this.energyEnvelopeSquared +=
+      (blockRms * blockRms - this.energyEnvelopeSquared) *
+      envelopeSmoothing;
+    const energyEnvelope = Math.sqrt(
+      Math.max(0, this.energyEnvelopeSquared),
+    );
+    this.stationaryLevel +=
+      (energyEnvelope - this.stationaryLevel) * statisticsSmoothing;
+    this.stationaryDeviation +=
+      (Math.abs(energyEnvelope - this.stationaryLevel) -
+        this.stationaryDeviation) *
+      statisticsSmoothing;
+    this.longTermZeroCrossingRate +=
+      (zeroCrossingRate - this.longTermZeroCrossingRate) *
+      statisticsSmoothing;
+    this.stationaryStatisticsSamples = Math.min(
+      sampleRate,
+      this.stationaryStatisticsSamples + frameCount,
+    );
+    const relativeDeviation =
+      this.stationaryDeviation / Math.max(0.0001, this.stationaryLevel);
+    const lowStationaryTone =
+      this.stationaryStatisticsSamples >= sampleRate * 0.6 &&
+      this.stationaryLevel >= 0.0015 &&
+      this.stationaryLevel <= 0.0062 &&
+      this.longTermZeroCrossingRate < 0.0065 &&
+      relativeDeviation < 0.09;
+    this.stationaryToneSamples = lowStationaryTone
+      ? Math.min(
+          this.stationaryToneSpan,
+          this.stationaryToneSamples + frameCount,
+        )
+      : 0;
+    const suppressStationaryTone =
+      this.stationaryToneSamples >= this.stationaryToneSpan;
+    if (suppressStationaryTone) {
+      this.gateHoldSamples = 0;
+      this.gateTarget = 10 ** ((-8 * isolationAmount) / 20);
+      return;
+    }
+    const likelyVoicedSpeech =
+      zeroCrossingRate < 0.09 &&
+      blockRms >= closeThreshold * 0.78;
+
+    if (blockRms >= openThreshold || likelyVoicedSpeech) {
+      this.gateHoldSamples = this.gateHoldSpan;
+      this.gateTarget = 1;
+      return;
+    }
+
+    if (this.gateHoldSamples > 0) {
+      this.gateHoldSamples = Math.max(0, this.gateHoldSamples - frameCount);
+      this.gateTarget = 1;
+      return;
+    }
+
+    const range = Math.max(0.00001, openThreshold - closeThreshold);
+    const position = clamp((blockRms - closeThreshold) / range, 0, 1);
+    const smoothPosition = position * position * (3 - 2 * position);
+    const minimumGain = 10 ** ((-26 * isolationAmount) / 20);
+    this.gateTarget =
+      minimumGain + (1 - minimumGain) * smoothPosition;
   }
 }
 

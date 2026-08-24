@@ -12,6 +12,7 @@ O Cloak é um chat de voz com compartilhamento de tela que funciona direto no na
 - autorização explícita do microfone;
 - seleção da entrada de áudio antes e durante a conversa;
 - equalizador de voz com estilos Natural, Fina, Grave, Robô e Eletrônica;
+- isolamento de voz em tempo real com supressão nativa, foco na faixa da fala e redução adaptativa de ruído;
 - teste local com retorno da própria voz e opção de salvar o ajuste como padrão;
 - opção de entrar apenas para ouvir;
 - áudio em tempo real com WebRTC;
@@ -61,7 +62,7 @@ O endereço terá o formato `https://seu-usuario.github.io/nome-do-repositorio/`
 
 ## Como a conexão funciona
 
-O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, áudio e telas trafegam por WebRTC diretamente entre os participantes e não são gravados pelo Cloak. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
+O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegadores se encontrem, ele usa o PeerJS Cloud como serviço de sinalização. Depois da conexão, áudio e telas trafegam por WebRTC diretamente entre os participantes e não são gravados pelo Cloak. O isolamento trata o som em tempo real no próprio dispositivo, sem salvar amostras do microfone. As mensagens do chat ficam apenas na sessão temporária do navegador para permitir a recuperação após uma atualização da página; não usam banco de dados e são apagadas quando o anfitrião encerra a sala.
 
 Isso não torna a conexão anônima: PeerJS Cloud e os servidores STUN recebem os metadados de rede necessários para estabelecer a chamada, e participantes WebRTC podem receber informações de conectividade. Não use o Cloak como ferramenta de anonimato; o código da sala funciona somente como chave de acesso ao convite.
 
@@ -71,6 +72,7 @@ O criador da sala funciona como coordenador. Se ele atualizar a página ou perde
 
 ## Limites deste MVP
 
+- O isolamento reduz principalmente ruído contínuo e som ambiente nas pausas. Ele não separa perfeitamente vozes de música, conversa ou impacto que aconteçam ao mesmo tempo; aproxime o microfone e use fones quando o ambiente for muito barulhento.
 - O PeerJS Cloud é um serviço público compartilhado, adequado para protótipos, sem garantia de disponibilidade para um produto comercial.
 - A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio e a tela. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
 - A sala usa uma malha de conexões entre os navegadores. O limite lógico é de 30 pessoas, mas muitas vozes simultâneas podem sobrecarregar CPU e upload; estabilidade garantida em grupos grandes exige uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
@@ -88,7 +90,7 @@ app.js                        salas, microfone, WebRTC e estados
 pwa.js                        instalação e registro do service worker
 manifest.webmanifest          identidade e configuração do aplicativo
 service-worker.js             cache do shell e abertura offline
-voice-effects-processor.js    processamento dos efeitos de voz em tempo real
+voice-effects-processor.js    isolamento, redução de ruído e efeitos de voz em tempo real
 vendor/peerjs.min.js          PeerJS 1.5.5 fixado e servido pelo próprio site
 vendor/peerjs.LICENSE.txt     licença MIT da dependência vendorizada
 src/icons/icon-*.png          ícones de instalação normal e maskable

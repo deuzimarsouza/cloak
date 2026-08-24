@@ -187,6 +187,8 @@
     voiceTrebleValue: document.querySelector("#voice-treble-value"),
     voiceIntensity: document.querySelector("#voice-intensity"),
     voiceIntensityValue: document.querySelector("#voice-intensity-value"),
+    voiceIsolation: document.querySelector("#voice-isolation"),
+    voiceIsolationState: document.querySelector("#voice-isolation-state"),
     voiceMonitorButton: document.querySelector("#voice-monitor-button"),
     voiceMonitorLabel: document.querySelector("#voice-monitor-label"),
     voiceResetButton: document.querySelector("#voice-reset-button"),
@@ -245,6 +247,7 @@
     voiceEnginePromise: null,
     voiceEngineGeneration: 0,
     voiceWorkletPromise: null,
+    nativeNoiseSuppressionPromise: null,
     voiceSettings: createNaturalVoiceSettings(),
     voiceMonitoring: false,
     voicePreparing: false,
@@ -285,6 +288,7 @@
       mid: 0,
       treble: 0,
       intensity: 0,
+      isolationEnabled: true,
     };
   }
 
@@ -314,6 +318,7 @@
         100,
         recommended.intensity,
       ),
+      isolationEnabled: candidate.isolationEnabled !== false,
     };
   }
 
@@ -325,6 +330,7 @@
       mid: parsed.mid,
       treble: parsed.treble,
       intensity: parsed.intensity,
+      isolationEnabled: parsed.isolationEnabled,
     };
   }
 
@@ -899,6 +905,10 @@
       dom.equalizerDialog.close(),
     );
     dom.voicePresets.addEventListener("change", handleVoicePresetChange);
+    dom.voiceIsolation.addEventListener(
+      "change",
+      handleVoiceIsolationChange,
+    );
     [dom.voiceBass, dom.voiceMid, dom.voiceTreble, dom.voiceIntensity].forEach(
       (range) => {
         range.addEventListener("input", handleVoiceAdjustmentInput);
@@ -1283,12 +1293,58 @@
   function captureMicrophone(deviceId = "") {
     const audio = {
       echoCancellation: true,
-      noiseSuppression: true,
+      noiseSuppression: state.voiceSettings.isolationEnabled !== false,
       autoGainControl: true,
     };
 
     if (deviceId) audio.deviceId = { exact: deviceId };
     return navigator.mediaDevices.getUserMedia({ video: false, audio });
+  }
+
+  function applyNativeNoiseSuppression(enabled) {
+    const track = state.localStream?.getAudioTracks()[0];
+    if (!track?.applyConstraints || track.readyState !== "live") {
+      return Promise.resolve(false);
+    }
+    const supported =
+      navigator.mediaDevices.getSupportedConstraints?.() || Object.create(null);
+    if (!supported.noiseSuppression) return Promise.resolve(false);
+
+    const previous = state.nativeNoiseSuppressionPromise || Promise.resolve();
+    const task = previous.catch(() => false).then(async () => {
+      const currentTrack = state.localStream?.getAudioTracks()[0];
+      if (
+        currentTrack !== track ||
+        track.readyState !== "live" ||
+        (state.voiceSettings.isolationEnabled !== false) !== enabled
+      ) {
+        return false;
+      }
+      const constraints = { ...(track.getConstraints?.() || {}) };
+      constraints.noiseSuppression = enabled;
+      if (supported.echoCancellation) constraints.echoCancellation = true;
+      if (supported.autoGainControl) constraints.autoGainControl = true;
+      try {
+        await track.applyConstraints(constraints);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    });
+    state.nativeNoiseSuppressionPromise = task;
+    task.then(
+      () => {
+        if (state.nativeNoiseSuppressionPromise === task) {
+          state.nativeNoiseSuppressionPromise = null;
+        }
+      },
+      () => {
+        if (state.nativeNoiseSuppressionPromise === task) {
+          state.nativeNoiseSuppressionPromise = null;
+        }
+      },
+    );
+    return task;
   }
 
   async function handleMicrophoneSelection(event) {
@@ -4853,9 +4909,11 @@
     inputStream = null,
     engineGeneration = state.voiceEngineGeneration,
   ) {
+    const initialSettings =
+      parseVoiceSettings(state.voiceSettings) || createNaturalVoiceSettings();
     const highpass = context.createBiquadFilter();
     highpass.type = "highpass";
-    highpass.frequency.value = 70;
+    highpass.frequency.value = initialSettings.isolationEnabled ? 90 : 70;
     highpass.Q.value = 0.7;
 
     const bass = context.createBiquadFilter();
@@ -4868,6 +4926,12 @@
     const treble = context.createBiquadFilter();
     treble.type = "highshelf";
     treble.frequency.value = 3800;
+    const lowpass = context.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = initialSettings.isolationEnabled
+      ? Math.min(9000, context.sampleRate * 0.45)
+      : Math.min(18000, context.sampleRate * 0.45);
+    lowpass.Q.value = 0.55;
 
     const fallbackGain = context.createGain();
     fallbackGain.gain.value = 1;
@@ -4887,11 +4951,12 @@
     const outputTrack = destination.stream.getAudioTracks()[0];
     if (!outputTrack) throw new Error("voice-output-unavailable");
 
-    highpass.connect(bass);
+    highpass.connect(lowpass);
+    lowpass.connect(fallbackGain);
+    fallbackGain.connect(bass);
     bass.connect(mid);
     mid.connect(treble);
-    treble.connect(fallbackGain);
-    fallbackGain.connect(compressor);
+    treble.connect(compressor);
     compressor.connect(outboundGain);
     outboundGain.connect(destination);
     compressor.connect(monitorGain);
@@ -4905,6 +4970,7 @@
       bass,
       mid,
       treble,
+      lowpass,
       fallbackGain,
       effectGain,
       worklet: null,
@@ -4938,12 +5004,13 @@
         outputChannelCount: [1],
         channelCount: 1,
         channelCountMode: "explicit",
+        parameterData: voiceEffectParameters(initialSettings),
       });
       engine.worklet = worklet;
       engine.workletAvailable = true;
-      treble.connect(worklet);
+      lowpass.connect(worklet);
       worklet.connect(effectGain);
-      effectGain.connect(compressor);
+      effectGain.connect(bass);
       worklet.addEventListener("processorerror", () => {
         if (state.voiceEngine !== engine) return;
         engine.workletAvailable = false;
@@ -4951,7 +5018,9 @@
         fadeAudioParam(engine.fallbackGain.gain, 1, 0.012);
         syncVoiceEqualizerUI();
         setEqualizerStatus(
-          "Os efeitos especiais pararam. Sua voz natural continua ativa.",
+          state.voiceSettings.isolationEnabled
+            ? "O isolamento avançado parou. A redução básica do navegador continua ativa."
+            : "Os efeitos especiais pararam. Sua voz natural continua ativa.",
           true,
         );
       });
@@ -4984,7 +5053,7 @@
       return state.voiceWorkletPromise.promise;
     }
     const promise = context.audioWorklet.addModule(
-      new URL("voice-effects-processor.js?v=1", document.baseURI),
+      new URL("voice-effects-processor.js?v=2", document.baseURI),
     );
     state.voiceWorkletPromise = { context, promise };
     promise.catch(() => {
@@ -5008,6 +5077,15 @@
       previousSource?.disconnect();
     } catch (_) {
       // A fonte anterior pode já ter sido desconectada pelo navegador.
+    }
+    resetVoiceNoiseProfile(engine);
+  }
+
+  function resetVoiceNoiseProfile(engine = state.voiceEngine) {
+    try {
+      engine?.worklet?.port?.postMessage({ type: "reset-noise-profile" });
+    } catch (_) {
+      // O fallback nativo continua ativo quando o processador não responde.
     }
   }
 
@@ -5033,6 +5111,7 @@
       electronicAmount: 0,
       effectMix: 1,
       outputGain: 0.9,
+      isolationAmount: settings.isolationEnabled ? 1 : 0,
     };
     if (settings.preset === "thin") {
       parameters.pitchSemitones = 7 * amount;
@@ -5061,6 +5140,18 @@
     fadeAudioParam(engine.bass.gain, settings.bass, 0.025);
     fadeAudioParam(engine.mid.gain, settings.mid, 0.025);
     fadeAudioParam(engine.treble.gain, settings.treble, 0.025);
+    fadeAudioParam(
+      engine.highpass.frequency,
+      settings.isolationEnabled ? 90 : 70,
+      0.035,
+    );
+    fadeAudioParam(
+      engine.lowpass.frequency,
+      settings.isolationEnabled
+        ? Math.min(9000, engine.context.sampleRate * 0.45)
+        : Math.min(18000, engine.context.sampleRate * 0.45),
+      0.035,
+    );
     if (engine.workletAvailable && engine.worklet) {
       const parameters = voiceEffectParameters(settings);
       Object.entries(parameters).forEach(([name, value]) => {
@@ -5177,6 +5268,7 @@
       engine.bass,
       engine.mid,
       engine.treble,
+      engine.lowpass,
       engine.fallbackGain,
       engine.effectGain,
       engine.worklet,
@@ -5207,6 +5299,7 @@
       engine.bass,
       engine.mid,
       engine.treble,
+      engine.lowpass,
       engine.fallbackGain,
       engine.effectGain,
       engine.worklet,
@@ -5237,8 +5330,37 @@
       dom.equalizerDialog.setAttribute("open", "");
     }
     requestAnimationFrame(() => {
-      dom.voicePresets.querySelector("input:checked")?.focus();
+      dom.voiceIsolation.focus();
     });
+  }
+
+  function handleVoiceIsolationChange(event) {
+    const enabled = Boolean(event.currentTarget.checked);
+    state.voiceSettings = {
+      ...state.voiceSettings,
+      isolationEnabled: enabled,
+    };
+    if (enabled) resetVoiceNoiseProfile();
+    applyVoiceSettingsToEngine();
+    syncVoiceEqualizerUI();
+    saveActiveSession();
+    void applyNativeNoiseSuppression(enabled);
+
+    if (
+      enabled &&
+      state.voiceEngine &&
+      !state.voiceEngine.workletAvailable
+    ) {
+      setEqualizerStatus(
+        "Redução básica ativada. O isolamento reforçado não está disponível neste navegador.",
+      );
+      return;
+    }
+    setEqualizerStatus(
+      enabled
+        ? "Isolamento ativado. O áudio é tratado ao vivo neste dispositivo."
+        : "Isolamento desativado. Sua voz continuará com o estilo escolhido.",
+    );
   }
 
   function handleVoicePresetChange(event) {
@@ -5250,6 +5372,7 @@
       return;
     const preset = VOICE_PRESETS[input.value];
     state.voiceSettings = {
+      ...state.voiceSettings,
       preset: input.value,
       bass: preset.bass,
       mid: preset.mid,
@@ -5293,7 +5416,11 @@
   }
 
   function resetVoiceEqualizer() {
-    state.voiceSettings = createNaturalVoiceSettings();
+    const isolationEnabled = state.voiceSettings.isolationEnabled !== false;
+    state.voiceSettings = {
+      ...createNaturalVoiceSettings(),
+      isolationEnabled,
+    };
     applyVoiceSettingsToEngine();
     syncVoiceEqualizerUI();
     saveActiveSession();
@@ -5304,11 +5431,11 @@
     const saved = storeVoiceProfile();
     setEqualizerStatus(
       saved
-        ? "Padrão salvo neste dispositivo para as próximas salas."
-        : "O navegador não permitiu salvar o padrão.",
+        ? "Ajustes salvos neste dispositivo para as próximas salas."
+        : "O navegador não permitiu salvar os ajustes.",
       !saved,
     );
-    if (saved) showToast("Equalizador definido como padrão.");
+    if (saved) showToast("Ajustes de voz definidos como padrão.");
   }
 
   async function toggleVoiceMonitor() {
@@ -5368,6 +5495,10 @@
       parseVoiceSettings(state.voiceSettings) || createNaturalVoiceSettings();
     state.voiceSettings = settings;
     const preset = VOICE_PRESETS[settings.preset];
+    dom.voiceIsolation.checked = settings.isolationEnabled;
+    dom.voiceIsolationState.textContent = settings.isolationEnabled
+      ? "Ativo"
+      : "Desativado";
     dom.voicePresets
       .querySelectorAll('input[name="voice-preset"]')
       .forEach((input) => {
@@ -5386,17 +5517,25 @@
       updateVoiceRangeFill(range, value);
     });
 
-    const active =
+    const activeEffect =
       (settings.preset !== "natural" && settings.intensity > 0) ||
       settings.bass !== 0 ||
       settings.mid !== 0 ||
       settings.treble !== 0;
-    dom.voiceEqualizerButton.classList.toggle("has-active-effect", active);
+    dom.voiceEqualizerButton.classList.toggle(
+      "has-active-effect",
+      activeEffect,
+    );
+    dom.voiceEqualizerButton.classList.toggle(
+      "has-voice-isolation",
+      settings.isolationEnabled,
+    );
     dom.voiceEqualizerButton.setAttribute(
       "aria-label",
-      `Abrir equalizador de voz, estilo ${preset.label}`,
+      `Abrir ajustes de voz, isolamento ${settings.isolationEnabled ? "ativado" : "desativado"}, estilo ${preset.label}`,
     );
-    dom.voiceEqualizerButton.title = `Equalizador: ${preset.label}`;
+    dom.voiceEqualizerButton.title = `Voz: ${settings.isolationEnabled ? "isolamento ativo" : "isolamento desativado"}, estilo ${preset.label}`;
+    dom.voiceEqualizerLabel.textContent = "Voz";
     dom.voiceMonitorButton.disabled = !(
       state.microphoneGranted &&
       state.localStream

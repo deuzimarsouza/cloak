@@ -34,7 +34,7 @@
       sizes="180x180"
       href="./src/icons/apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=10" />
     <link
       rel="preload"
       as="image"
@@ -51,7 +51,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=9"></script>
+    <script defer src="app.js?v=10"></script>
     <script defer src="pwa.js?v=1"></script>
   </head>
   <body>
@@ -108,7 +108,7 @@
             class="control-button voice-equalizer-trigger"
             type="button"
             id="voice-equalizer-button"
-            aria-label="Abrir equalizador de voz, estilo Natural"
+            aria-label="Abrir ajustes de voz, isolamento ativado, estilo Natural"
             aria-haspopup="dialog"
             aria-controls="equalizer-dialog"
           >
@@ -1147,22 +1147,47 @@
         <header class="equalizer-header" aria-labelledby="equalizer-title">
           <div>
             <p class="eyebrow">Sua voz, do seu jeito</p>
-            <h2 id="equalizer-title">Equalizador de voz</h2>
+            <h2 id="equalizer-title">Ajustes de voz</h2>
             <p id="equalizer-description">
-              Altera somente a voz que você envia para a sala.
+              Reduza o ruído e escolha como sua voz será enviada para a sala.
             </p>
           </div>
           <button
             class="equalizer-close-button"
             type="button"
             id="equalizer-close-button"
-            aria-label="Fechar equalizador"
+            aria-label="Fechar ajustes de voz"
           >
             <span aria-hidden="true">×</span>
           </button>
         </header>
 
         <div class="equalizer-body">
+          <label class="voice-isolation-card">
+            <input
+              class="visually-hidden"
+              type="checkbox"
+              role="switch"
+              id="voice-isolation"
+              aria-labelledby="voice-isolation-label"
+              aria-describedby="voice-isolation-description"
+              checked
+            />
+            <span class="voice-isolation-copy">
+              <span class="voice-isolation-heading">
+                <strong id="voice-isolation-label">Isolamento de voz</strong>
+                <small id="voice-isolation-state" aria-hidden="true">Ativo</small>
+              </span>
+              <small id="voice-isolation-description">
+                Reduz ruídos de fundo em tempo real neste dispositivo, sem
+                gravar o áudio.
+              </small>
+            </span>
+            <span class="voice-isolation-switch" aria-hidden="true">
+              <span></span>
+            </span>
+          </label>
+
           <fieldset class="voice-preset-fieldset">
             <legend>Estilo da voz</legend>
             <div class="voice-presets" id="voice-presets">
@@ -1299,14 +1324,14 @@
             type="button"
             id="voice-reset-button"
           >
-            Restaurar natural
+            Restaurar voz natural
           </button>
           <button
             class="button button-primary"
             type="button"
             id="voice-save-default-button"
           >
-            Salvar como padrão
+            Usar como padrão
           </button>
         </div>
       </div>
