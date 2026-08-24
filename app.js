@@ -261,6 +261,7 @@
     guestReconnectGeneration: 0,
     guestReconnecting: false,
     restoring: false,
+    pendingOfflineRestore: null,
     resumePeerId: "",
     resumeToken: "",
     memberResumeTokens: new Map(),
@@ -274,6 +275,7 @@
     chatHistoryTimers: new Set(),
     pendingChatSend: null,
     pendingRemovalPeerId: "",
+    networkOffline: navigator.onLine === false,
   };
 
   function createNaturalVoiceSettings() {
@@ -363,10 +365,17 @@
     updateScreenShareControl();
     applyInviteFromHash();
     const activeSession = readActiveSession();
-    if (activeSession) {
+    if (activeSession && navigator.onLine !== false) {
       void restoreActiveSession(activeSession);
     } else {
       showScreen("home");
+      if (state.networkOffline) {
+        if (activeSession) state.pendingOfflineRestore = activeSession;
+        showToast(
+          "Você está sem internet. O Cloak abriu normalmente, mas as salas exigem conexão.",
+          "error",
+        );
+      }
     }
   }
 
@@ -505,6 +514,7 @@
   }
 
   function clearActiveSession() {
+    state.pendingOfflineRestore = null;
     try {
       sessionStorage.removeItem(CONFIG.activeSessionKey);
     } catch (_) {
@@ -948,16 +958,40 @@
     });
 
     window.addEventListener("online", () => {
+      const connectionWasOffline = state.networkOffline;
+      state.networkOffline = false;
+      if (
+        state.pendingOfflineRestore &&
+        !state.joined &&
+        !state.restoring &&
+        !state.mode
+      ) {
+        const activeSession = readActiveSession();
+        state.pendingOfflineRestore = null;
+        if (activeSession) {
+          showToast("Conexão restabelecida. Restaurando sua sala…");
+          void restoreActiveSession(activeSession);
+          return;
+        }
+      }
       if (state.joined && !state.guestReconnecting) {
         setConnectionStatus("connected", "Conectado");
+      } else if (connectionWasOffline) {
+        showToast("Conexão restabelecida.");
       }
     });
 
     window.addEventListener("offline", () => {
+      state.networkOffline = true;
       if (state.joined) {
         setConnectionStatus("offline", "Sem conexão");
         showToast(
           "Sua conexão caiu. As chamadas podem ser interrompidas.",
+          "error",
+        );
+      } else {
+        showToast(
+          "Você está sem internet. As salas exigem conexão.",
           "error",
         );
       }
@@ -997,6 +1031,10 @@
   }
 
   function prepareCreateRoom() {
+    if (navigator.onLine === false) {
+      showToast("Conecte-se à internet para criar uma sala.", "error");
+      return;
+    }
     if (!validateName()) return;
     const displayName = sanitizeName(dom.displayName.value);
     if (!sanitizeRoomName(dom.createRoomName.value)) {
@@ -1028,6 +1066,11 @@
 
   function confirmCreateRoom(event) {
     event.preventDefault();
+    if (navigator.onLine === false) {
+      dom.createRoomStatus.textContent =
+        "Conecte-se à internet para criar a sala.";
+      return;
+    }
     const roomName = sanitizeRoomName(dom.createRoomName.value);
     const selectedCapacity = dom.createRoomForm.querySelector(
       'input[name="roomCapacity"]:checked',
@@ -1066,6 +1109,10 @@
 
   function prepareJoinRoom(event) {
     event.preventDefault();
+    if (navigator.onLine === false) {
+      showToast("Conecte-se à internet para entrar em uma sala.", "error");
+      return;
+    }
     const nameIsValid = validateName();
     const codeIsValid = validateCode();
     if (!nameIsValid || !codeIsValid) return;
@@ -1661,6 +1708,12 @@
       : dom.enterRoomButton;
 
     try {
+      if (navigator.onLine === false) {
+        throw createAppError(
+          "offline",
+          "Conecte-se à internet para acessar uma sala.",
+        );
+      }
       resetChat();
       dom.permissionError.textContent = "";
       setPermissionActionsDisabled(true);
@@ -5753,6 +5806,7 @@
     state.muted = true;
     state.guestReconnecting = false;
     state.restoring = false;
+    state.pendingOfflineRestore = null;
     state.resumePeerId = "";
     state.resumeToken = "";
     state.blockedResumeTokens.clear();
@@ -5820,6 +5874,9 @@
 
   function sessionErrorMessage(error) {
     const code = error?.code || error?.type;
+    if (code === "offline") {
+      return "Conecte-se à internet para criar ou entrar em uma sala.";
+    }
     if (code === "room-not-found" || code === "peer-unavailable") {
       return "Não encontramos essa sala. Confira o código e veja se quem criou ainda está conectado.";
     }
