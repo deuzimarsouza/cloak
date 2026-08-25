@@ -34,7 +34,7 @@
       sizes="180x180"
       href="./src/icons/apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
     <link
       rel="preload"
       as="image"
@@ -51,7 +51,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=10"></script>
+    <script defer src="app.js?v=11"></script>
     <script defer src="pwa.js?v=1"></script>
   </head>
   <body>
@@ -328,139 +328,9 @@
                 </div>
               </form>
 
-              <p class="permission-footnote">
-                O navegador só pedirá acesso ao microfone depois que você
-                continuar.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section
-          class="screen permission-screen"
-          id="permission-screen"
-          aria-labelledby="permission-title"
-          hidden
-        >
-          <button
-            class="text-button back-button"
-            type="button"
-            id="permission-back-button"
-          >
-            <span aria-hidden="true">←</span> Voltar
-          </button>
-
-          <div class="permission-layout">
-            <div class="permission-card panel">
-              <div class="microphone-illustration" aria-hidden="true">
-                <div class="mic-capsule"></div>
-                <div class="mic-stem"></div>
-                <span class="mic-ring ring-one"></span>
-                <span class="mic-ring ring-two"></span>
-              </div>
-
-              <p class="eyebrow" id="permission-eyebrow">Só falta uma etapa</p>
-              <h1 id="permission-title" tabindex="-1">Prepare seu microfone</h1>
-              <p class="permission-description">
-                O Cloak precisa da sua autorização para que as outras pessoas
-                possam ouvir você. Você poderá se silenciar a qualquer momento.
-              </p>
-
-              <div
-                class="room-preview"
-                role="group"
-                aria-label="Resumo da entrada"
-              >
-                <div>
-                  <span id="pending-action-label">Nova sala</span>
-                  <strong id="pending-room-code">—</strong>
-                </div>
-                <div>
-                  <span>Você entrará como</span>
-                  <strong id="pending-display-name">—</strong>
-                </div>
-              </div>
-
-              <div id="permission-initial">
-                <button
-                  class="button button-primary button-large"
-                  type="button"
-                  id="allow-microphone-button"
-                >
-                  <span
-                    class="control-symbol mic-symbol"
-                    aria-hidden="true"
-                  ></span>
-                  Permitir microfone
-                </button>
-                <button
-                  class="button button-quiet"
-                  type="button"
-                  id="listen-only-button"
-                >
-                  Entrar apenas para ouvir
-                </button>
-              </div>
-
-              <div class="microphone-ready" id="microphone-ready" hidden>
-                <div class="meter-row">
-                  <div class="device-status">
-                    <span class="device-check" aria-hidden="true">✓</span>
-                    <div>
-                      <strong>Microfone detectado</strong>
-                      <span id="microphone-label">Pronto para usar</span>
-                    </div>
-                  </div>
-                  <div
-                    class="volume-meter"
-                    id="volume-meter"
-                    role="meter"
-                    aria-label="Nível do microfone"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                    aria-valuenow="0"
-                  >
-                    <span id="volume-meter-fill"></span>
-                  </div>
-                </div>
-                <div class="device-picker">
-                  <label for="microphone-select">Microfone usado no chat</label>
-                  <div class="select-wrap">
-                    <select
-                      class="device-select"
-                      id="microphone-select"
-                      aria-describedby="microphone-select-status"
-                    >
-                      <option value="">Microfone atual</option>
-                    </select>
-                    <span class="select-arrow" aria-hidden="true">⌄</span>
-                  </div>
-                  <p
-                    class="device-picker-status"
-                    id="microphone-select-status"
-                    aria-live="polite"
-                  >
-                    Escolha qual entrada de áudio será enviada para a sala.
-                  </p>
-                </div>
-                <button
-                  class="button button-primary button-large"
-                  type="button"
-                  id="enter-room-button"
-                >
-                  Entrar na sala
-                  <span class="button-arrow" aria-hidden="true">↗</span>
-                </button>
-              </div>
-
-              <p
-                class="permission-error"
-                id="permission-error"
-                role="alert"
-              ></p>
-              <p class="secure-note">
-                <span aria-hidden="true">◇</span> Permissão protegida pelo
-                navegador
+              <p class="entry-footnote">
+                Você entra na sala primeiro. Se a sala permitir, só então o
+                navegador pedirá acesso ao microfone.
               </p>
             </div>
           </div>
