@@ -2,7 +2,7 @@
 
 const CACHE_PREFIX = "cloak-shell-";
 // Mude esta versão sempre que qualquer item de APP_SHELL mudar.
-const CACHE_VERSION = "2026-08-25-2";
+const CACHE_VERSION = "2026-08-25-3";
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const NAVIGATION_TIMEOUT = 4000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -12,7 +12,7 @@ const APP_SHELL = [
   APP_HOME,
   OFFLINE_PAGE,
   new URL("./manifest.webmanifest", self.registration.scope).href,
-  new URL("./styles.css?v=11", self.registration.scope).href,
+  new URL("./styles.css?v=12", self.registration.scope).href,
   new URL("./vendor/peerjs.min.js?v=1.5.5", self.registration.scope).href,
   new URL("./app.js?v=11", self.registration.scope).href,
   new URL("./pwa.js?v=1", self.registration.scope).href,

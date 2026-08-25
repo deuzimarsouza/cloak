@@ -5349,9 +5349,9 @@ body {
 
 .room-layout.has-screen-share {
   grid-template-columns: minmax(0, 1.38fr) minmax(300px, 0.62fr);
-  grid-template-rows: minmax(0, 1.35fr) minmax(180px, 0.65fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   grid-template-areas:
-    "screen voice"
+    "chat screen"
     "chat voice";
 }
 
@@ -5410,6 +5410,10 @@ body {
   overscroll-behavior: contain;
   scrollbar-color: rgba(184, 173, 255, 0.28) transparent;
   scrollbar-gutter: stable;
+}
+
+.room-layout.has-screen-share .screen-share-grid {
+  grid-auto-rows: minmax(0, 1fr);
 }
 
 .screen-share-card {
