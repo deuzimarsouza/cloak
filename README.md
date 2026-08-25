@@ -9,11 +9,11 @@ O Cloak é um chat de voz com compartilhamento de tela que funciona direto no na
 - permissão definida pelo anfitrião para convidados falarem ou entrarem somente para ouvir;
 - remoção de participantes pelo anfitrião;
 - convite por código ou URL;
-- autorização explícita do microfone;
-- seleção da entrada de áudio antes e durante a conversa;
+- autorização explícita do microfone somente depois que a sala já está aberta;
+- seleção da entrada de áudio durante a conversa;
 - equalizador de voz com estilos Natural, Fina, Grave, Robô e Eletrônica;
 - teste local com retorno da própria voz e opção de salvar o ajuste como padrão;
-- opção de entrar apenas para ouvir;
+- permanência na sala apenas para ouvir quando o microfone não é permitido;
 - áudio em tempo real com WebRTC;
 - compartilhamento de aba, janela ou tela com o seletor seguro do navegador;
 - prévia local, grade para vários apresentadores e encerramento pelo Cloak ou pelo botão nativo do navegador;

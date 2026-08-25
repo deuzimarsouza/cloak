@@ -118,7 +118,6 @@
     roomMenuBody: document.querySelector(".room-menu-body"),
     roomMenuClose: document.querySelector("#room-menu-close"),
     homeScreen: document.querySelector("#home-screen"),
-    permissionScreen: document.querySelector("#permission-screen"),
     roomScreen: document.querySelector("#room-screen"),
     roomScreenTitle: document.querySelector("#room-screen-title"),
     roomLayout: document.querySelector(".room-layout"),
@@ -140,23 +139,6 @@
     allowParticipantVoice: document.querySelector("#allow-participant-voice"),
     joinRoomButton: document.querySelector("#join-room-button"),
     inviteArrival: document.querySelector("#invite-arrival"),
-    permissionBackButton: document.querySelector("#permission-back-button"),
-    permissionEyebrow: document.querySelector("#permission-eyebrow"),
-    permissionTitle: document.querySelector("#permission-title"),
-    pendingActionLabel: document.querySelector("#pending-action-label"),
-    pendingRoomCode: document.querySelector("#pending-room-code"),
-    pendingDisplayName: document.querySelector("#pending-display-name"),
-    permissionInitial: document.querySelector("#permission-initial"),
-    allowMicrophoneButton: document.querySelector("#allow-microphone-button"),
-    listenOnlyButton: document.querySelector("#listen-only-button"),
-    microphoneReady: document.querySelector("#microphone-ready"),
-    microphoneLabel: document.querySelector("#microphone-label"),
-    microphoneSelect: document.querySelector("#microphone-select"),
-    microphoneSelectStatus: document.querySelector("#microphone-select-status"),
-    volumeMeter: document.querySelector("#volume-meter"),
-    volumeMeterFill: document.querySelector("#volume-meter-fill"),
-    enterRoomButton: document.querySelector("#enter-room-button"),
-    permissionError: document.querySelector("#permission-error"),
     roomTitle: document.querySelector("#room-title"),
     roomKicker: document.querySelector("#room-kicker"),
     roomCapacitySummary: document.querySelector("#room-capacity-summary"),
@@ -256,6 +238,7 @@
     isHost: false,
     joined: false,
     leaving: false,
+    entryInProgress: false,
     localStream: null,
     pendingLocalStream: null,
     silentStream: null,
@@ -301,9 +284,6 @@
     voiceSettings: createNaturalVoiceSettings(),
     voiceMonitoring: false,
     voicePreparing: false,
-    permissionSource: null,
-    permissionAnalyser: null,
-    permissionMeterFrame: 0,
     analysisNodes: new Map(),
     analysisFrame: 0,
     speakingPeers: new Set(),
@@ -634,6 +614,8 @@
           return;
         }
         state.restoring = false;
+        updateMuteControl();
+        updateAudioInputSelectorState();
         saveActiveSession();
         if (saved.restoreMicrophone)
           void restoreMicrophoneAfterReconnect(saved);
@@ -647,7 +629,7 @@
           state.restoring = false;
           clearActiveSession();
           closeNetworkConnections(true);
-          resetPermissionUI();
+          resetMicrophoneControls();
           resetSessionIdentity();
           showScreen("home");
           showToast("Você foi removido pelo anfitrião.", "error");
@@ -675,7 +657,7 @@
 
     clearActiveSession();
     closeNetworkConnections(true);
-    resetPermissionUI();
+    resetMicrophoneControls();
     resetSessionIdentity();
     dom.displayName.value = saved.displayName;
     dom.roomCode.value = formatRoomCode(saved.roomCode);
@@ -772,7 +754,6 @@
     track.enabled = !state.muted;
     watchLocalMicrophoneTrack(track);
     state.selectedAudioInputId = getTrackDeviceId(track);
-    dom.microphoneLabel.textContent = track.label || "Microfone atual";
     try {
       await ensureVoiceEngine(stream);
     } catch (_) {
@@ -840,7 +821,7 @@
       sendLocalMemberState();
     }
     if (restored && state.microphoneGranted) {
-      await publishRestoredMicrophoneTrack();
+      await publishMicrophoneTrackToRoom(true);
       await addAnalysisNode(
         state.selfPeerId,
         getProcessedVoiceStream() || state.localStream,
@@ -850,9 +831,19 @@
     saveActiveSession();
   }
 
-  async function publishRestoredMicrophoneTrack() {
+  async function publishMicrophoneTrackToRoom(recreateCalls = false) {
     const track = getPreferredVoiceTrack();
     if (!track || track.readyState !== "live") return;
+
+    if (recreateCalls) {
+      const peerIds = Array.from(state.participants.keys()).filter(
+        (peerId) => peerId !== state.selfPeerId,
+      );
+      peerIds.forEach(closeMediaForPeer);
+      if (!state.joined || state.leaving || track.readyState !== "live") return;
+      peerIds.forEach(placeMediaCall);
+      return;
+    }
 
     const calls = Array.from(state.mediaCalls.entries());
     await Promise.allSettled(
@@ -919,20 +910,10 @@
     dom.createRoomClose.addEventListener("click", closeCreateRoomDialog);
     dom.cancelCreateRoom.addEventListener("click", closeCreateRoomDialog);
     dom.homeForm.addEventListener("submit", prepareJoinRoom);
-    dom.permissionBackButton.addEventListener(
-      "click",
-      returnToHomeFromPermission,
-    );
-    dom.allowMicrophoneButton.addEventListener("click", requestMicrophone);
-    dom.microphoneSelect.addEventListener("change", handleMicrophoneSelection);
     dom.roomMicrophoneSelect.addEventListener(
       "change",
       handleMicrophoneSelection,
     );
-    dom.listenOnlyButton.addEventListener("click", enterAsListener);
-    dom.enterRoomButton.addEventListener("click", () => {
-      void startPreparedSession(dom.enterRoomButton);
-    });
     dom.sidebarCodeButton.addEventListener("click", copyRoomCode);
     dom.sidebarInviteButton.addEventListener("click", copyInviteLink);
     dom.copyInviteButton.addEventListener("click", openRoomMenuDialog);
@@ -1114,6 +1095,7 @@
   }
 
   function prepareCreateRoom() {
+    if (state.entryInProgress) return;
     if (navigator.onLine === false) {
       showToast("Conecte-se à internet para criar uma sala.", "error");
       return;
@@ -1149,6 +1131,7 @@
 
   function confirmCreateRoom(event) {
     event.preventDefault();
+    if (state.entryInProgress) return;
     if (navigator.onLine === false) {
       dom.createRoomStatus.textContent =
         "Conecte-se à internet para criar a sala.";
@@ -1187,11 +1170,12 @@
     } else {
       dom.createRoomDialog.removeAttribute("open");
     }
-    preparePermissionScreen();
+    void startPreparedSession(dom.createRoomButton);
   }
 
   function prepareJoinRoom(event) {
     event.preventDefault();
+    if (state.entryInProgress) return;
     if (navigator.onLine === false) {
       showToast("Conecte-se à internet para entrar em uma sala.", "error");
       return;
@@ -1207,23 +1191,7 @@
     state.guestsCanSpeak = true;
     state.roomCode = extractRoomCodeInput(dom.roomCode.value);
     state.resumeToken = generateResumeToken();
-    preparePermissionScreen();
-  }
-
-  function preparePermissionScreen() {
-    resetPermissionUI();
-    dom.pendingRoomCode.textContent = formatRoomCode(state.roomCode);
-    dom.pendingDisplayName.textContent = state.displayName;
-
-    if (state.mode === "create") {
-      dom.permissionEyebrow.textContent = "Sua sala está quase pronta";
-      dom.pendingActionLabel.textContent = "Nova sala";
-    } else {
-      dom.permissionEyebrow.textContent = "Convite confirmado";
-      dom.pendingActionLabel.textContent = "Entrar na sala";
-    }
-
-    showScreen("permission");
+    void startPreparedSession(dom.joinRoomButton);
   }
 
   function validateName() {
@@ -1273,94 +1241,32 @@
   }
 
   async function requestMicrophone() {
-    dom.permissionError.textContent = "";
-    const mediaGeneration = ++state.mediaGeneration;
+    if (
+      !state.joined ||
+      state.leaving ||
+      state.pageHiding ||
+      state.switchingMicrophone ||
+      state.microphoneGranted ||
+      !isLocalVoiceAllowed()
+    ) {
+      return false;
+    }
 
     if (!isSecureMicrophoneContext()) {
-      dom.permissionError.textContent =
-        "O microfone exige uma conexão segura. Abra o Cloak por HTTPS ou em localhost.";
-      return;
-    }
-
-    if (
-      !navigator.mediaDevices ||
-      typeof navigator.mediaDevices.getUserMedia !== "function"
-    ) {
-      dom.permissionError.textContent =
-        "Este navegador não oferece acesso ao microfone. Tente uma versão recente do Chrome, Edge, Firefox ou Safari.";
-      return;
-    }
-
-    setButtonBusy(dom.allowMicrophoneButton, true, "Solicitando acesso…");
-    dom.listenOnlyButton.disabled = true;
-
-    try {
-      stopLocalTracks();
-      const capturedStream = await captureMicrophone();
-      if (mediaGeneration !== state.mediaGeneration) {
-        capturedStream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      state.voicePreparing = true;
-      state.localStream = capturedStream;
-
-      const [track] = state.localStream.getAudioTracks();
-      if (!track || track.readyState !== "live") {
-        throw new Error("microphone-missing-track");
-      }
-
-      state.microphoneGranted = true;
-      state.enteredWithMicrophone = true;
-      state.muted = false;
-      track.enabled = true;
-      watchLocalMicrophoneTrack(track);
-      state.selectedAudioInputId = getTrackDeviceId(track);
-
-      try {
-        await ensureVoiceEngine(capturedStream);
-      } catch (_) {
-        // A captura natural permanece disponível como modo de compatibilidade.
-      } finally {
-        if (mediaGeneration === state.mediaGeneration)
-          state.voicePreparing = false;
-      }
-      if (mediaGeneration !== state.mediaGeneration) {
-        if (state.voiceEngine?.inputStream === capturedStream) {
-          detachVoiceInput(capturedStream);
-        }
-        capturedStream.getTracks().forEach((item) => item.stop());
-        return;
-      }
-      syncLocalAudioGates();
-
-      dom.microphoneLabel.textContent = track.label || "Dispositivo padrão";
-      dom.permissionInitial.hidden = true;
-      dom.microphoneReady.hidden = false;
-      await refreshAudioInputDevices();
-      if (mediaGeneration !== state.mediaGeneration) return;
-      if (track.readyState !== "live") {
-        if (state.microphoneGranted) handleLocalMicrophoneEnded();
-        return;
-      }
-      await startPermissionMeter(
-        getProcessedVoiceStream() || state.localStream,
+      reportMicrophoneActivationError(
+        "O microfone exige uma conexão segura. Abra o Cloak por HTTPS ou em localhost.",
       );
-      if (mediaGeneration !== state.mediaGeneration) return;
-      if (track.readyState !== "live") {
-        if (state.microphoneGranted) handleLocalMicrophoneEnded();
-        return;
-      }
-      dom.enterRoomButton.focus();
-    } catch (error) {
-      if (mediaGeneration !== state.mediaGeneration) return;
-      stopLocalTracks();
-      state.microphoneGranted = false;
-      state.enteredWithMicrophone = false;
-      state.muted = true;
-      dom.permissionError.textContent = microphoneErrorMessage(error);
-      setButtonBusy(dom.allowMicrophoneButton, false);
-      dom.listenOnlyButton.disabled = false;
+      return false;
     }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      reportMicrophoneActivationError(
+        "Este navegador não oferece acesso ao microfone. Tente uma versão recente do Chrome, Edge, Firefox ou Safari.",
+      );
+      return false;
+    }
+
+    return switchMicrophone("");
   }
 
   function captureMicrophone(deviceId = "") {
@@ -1384,47 +1290,66 @@
     await switchMicrophone(deviceId);
   }
 
-  async function switchMicrophone(deviceId) {
+  async function switchMicrophone(deviceId = "") {
+    const activating = !state.microphoneGranted;
     if (
       state.switchingMicrophone ||
-      !state.enteredWithMicrophone ||
+      !state.joined ||
+      state.leaving ||
+      state.pageHiding ||
+      !isLocalVoiceAllowed() ||
       !navigator.mediaDevices?.getUserMedia
     ) {
       synchronizeAudioInputSelectors();
-      return;
+      return false;
     }
 
     const previousStream = state.localStream;
     const previousTrack = previousStream?.getAudioTracks()[0];
     const previousDeviceId = state.selectedAudioInputId;
     const previousMicrophoneGranted = state.microphoneGranted;
-    const previousMicrophoneLabel = dom.microphoneLabel.textContent;
+    const previousEnteredWithMicrophone = state.enteredWithMicrophone;
+    const previousMuted = state.muted;
     const previousEngineStream = state.voiceEngine?.inputStream || null;
     const previousMember = state.participants.get(state.selfPeerId);
     const previousMemberState = previousMember
       ? { muted: previousMember.muted, listener: previousMember.listener }
       : null;
+    const expectedRoomCode = state.roomCode;
+    const expectedPeerId = state.selfPeerId;
     const mediaGeneration = ++state.mediaGeneration;
     let nextStream = null;
+
+    const isCurrentRequest = () =>
+      mediaGeneration === state.mediaGeneration &&
+      state.joined &&
+      !state.leaving &&
+      !state.pageHiding &&
+      state.roomCode === expectedRoomCode &&
+      state.selfPeerId === expectedPeerId;
 
     state.switchingMicrophone = true;
     stopVoiceMonitor();
     updateAudioInputSelectorState();
-    if (!dom.permissionScreen.hidden) dom.enterRoomButton.disabled = true;
-    setAudioInputStatus("Trocando o microfone…");
+    updateMuteControl();
+    setAudioInputStatus(
+      activating
+        ? "Aguardando a permissão do navegador…"
+        : "Trocando o microfone…",
+    );
 
     try {
       nextStream = await captureMicrophone(deviceId);
-      if (mediaGeneration !== state.mediaGeneration) {
+      if (!isCurrentRequest()) {
         nextStream.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
       const nextTrack = nextStream.getAudioTracks()[0];
       if (!nextTrack || nextTrack.readyState !== "live") {
         throw createAppError("microphone-missing-track", "");
       }
 
-      nextTrack.enabled = !state.muted;
+      nextTrack.enabled = activating ? true : !previousMuted;
       watchLocalMicrophoneTrack(nextTrack);
       state.pendingLocalStream = nextStream;
       state.voicePreparing = true;
@@ -1437,84 +1362,78 @@
           state.voicePreparing = false;
       }
 
-      if (mediaGeneration !== state.mediaGeneration) {
+      if (!isCurrentRequest()) {
         if (state.voiceEngine?.inputStream === nextStream) {
-          if (previousTrack?.readyState === "live") {
+          if (previousMicrophoneGranted && previousTrack?.readyState === "live") {
             attachVoiceInput(state.voiceEngine, previousStream);
           } else {
             detachVoiceInput(nextStream);
           }
         }
         nextStream.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
       if (nextTrack.readyState !== "live") {
         throw createAppError("microphone-ended", "");
       }
 
-      stopPermissionMeter();
       removeAnalysisNode(state.selfPeerId);
       state.localStream = nextStream;
       state.pendingLocalStream = null;
       state.selectedAudioInputId = getTrackDeviceId(nextTrack) || deviceId;
       state.microphoneGranted = true;
       state.enteredWithMicrophone = true;
-      dom.microphoneLabel.textContent =
-        nextTrack.label || "Dispositivo selecionado";
+      state.muted = activating ? false : previousMuted;
       syncLocalAudioGates();
-
-      const analysisStream = getProcessedVoiceStream() || nextStream;
-      if (state.joined) {
-        await publishCurrentVoiceTrackToCalls();
-        await addAnalysisNode(state.selfPeerId, analysisStream);
-      } else {
-        await startPermissionMeter(analysisStream);
-      }
-      if (
-        mediaGeneration !== state.mediaGeneration ||
-        nextTrack.readyState !== "live"
-      ) {
-        throw createAppError(
-          mediaGeneration !== state.mediaGeneration
-            ? "microphone-switch-cancelled"
-            : "microphone-ended",
-          "",
-        );
-      }
 
       const self = state.participants.get(state.selfPeerId);
       if (self) {
-        self.listener = getLocalListenerState();
-        self.muted = self.listener ? true : state.muted;
+        self.listener = false;
+        self.muted = state.muted;
         updateMuteControl();
         renderParticipants();
         sendLocalMemberState();
       }
 
+      await publishMicrophoneTrackToRoom(activating);
+      await addAnalysisNode(
+        state.selfPeerId,
+        getProcessedVoiceStream() || nextStream,
+      );
       await refreshAudioInputDevices();
-      if (
-        mediaGeneration !== state.mediaGeneration ||
-        nextTrack.readyState !== "live"
-      ) {
+      if (!isCurrentRequest() || nextTrack.readyState !== "live") {
         throw createAppError(
-          mediaGeneration !== state.mediaGeneration
+          !isCurrentRequest()
             ? "microphone-switch-cancelled"
             : "microphone-ended",
           "",
         );
       }
-      previousStream?.getTracks().forEach((track) => track.stop());
+
+      if (previousStream === state.silentStream) {
+        stopSilentStream();
+      } else if (previousStream !== nextStream) {
+        previousStream?.getTracks().forEach((track) => track.stop());
+      }
       syncVoiceEqualizerUI();
       setAudioInputStatus(
-        "Microfone alterado. A nova entrada já está sendo usada.",
+        activating
+          ? "Microfone ativado e pronto para usar na sala."
+          : "Microfone alterado. A nova entrada já está sendo usada.",
       );
       saveActiveSession();
-      if (state.joined) showToast("Microfone alterado com sucesso.");
+      showToast(
+        activating
+          ? "Microfone ativado com sucesso."
+          : "Microfone alterado com sucesso.",
+      );
+      return true;
     } catch (error) {
-      if (mediaGeneration !== state.mediaGeneration) {
+      if (!isCurrentRequest()) {
         if (state.voiceEngine?.inputStream === nextStream) {
           if (
             previousEngineStream === previousStream &&
+            previousMicrophoneGranted &&
             previousTrack?.readyState === "live"
           ) {
             attachVoiceInput(state.voiceEngine, previousStream);
@@ -1523,53 +1442,64 @@
           }
         }
         nextStream?.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
+
       const rollbackTrack =
-        previousTrack?.readyState === "live" ? previousTrack : null;
+        previousMicrophoneGranted && previousTrack?.readyState === "live"
+          ? previousTrack
+          : null;
       if (state.voiceEngine?.inputStream === nextStream) {
         if (rollbackTrack) attachVoiceInput(state.voiceEngine, previousStream);
         else detachVoiceInput(nextStream);
       }
 
       state.pendingLocalStream = null;
-      state.localStream = rollbackTrack
-        ? previousStream
-        : (state.silentStream ||= createSilentStream());
+      if (rollbackTrack) {
+        state.localStream = previousStream;
+      } else {
+        if (!state.silentStream?.getAudioTracks().length) {
+          stopSilentStream();
+          state.silentStream = createSilentStream();
+        }
+        state.localStream = state.silentStream;
+      }
       state.selectedAudioInputId = rollbackTrack ? previousDeviceId : "";
-      state.microphoneGranted = Boolean(
-        rollbackTrack && previousMicrophoneGranted,
-      );
-      state.muted = rollbackTrack ? state.muted : true;
-      dom.microphoneLabel.textContent = rollbackTrack
-        ? previousMicrophoneLabel
-        : "Microfone desconectado";
+      state.microphoneGranted = Boolean(rollbackTrack);
+      state.enteredWithMicrophone = previousEnteredWithMicrophone;
+      state.muted = rollbackTrack ? previousMuted : true;
       syncLocalAudioGates();
       await publishCurrentVoiceTrackToCalls();
       nextStream?.getTracks().forEach((track) => track.stop());
 
-      if (state.microphoneGranted && rollbackTrack) {
-        const analysisStream = getProcessedVoiceStream() || previousStream;
-        if (state.joined)
-          await addAnalysisNode(state.selfPeerId, analysisStream);
-        else await startPermissionMeter(analysisStream);
+      if (rollbackTrack) {
+        await addAnalysisNode(
+          state.selfPeerId,
+          getProcessedVoiceStream() || previousStream,
+        );
       }
       const self = state.participants.get(state.selfPeerId);
       if (self) {
-        self.listener = rollbackTrack ? getLocalListenerState() : true;
-        self.muted = rollbackTrack ? previousMemberState?.muted || false : true;
+        self.listener = rollbackTrack
+          ? getLocalListenerState()
+          : previousMemberState?.listener ?? true;
+        self.muted = rollbackTrack ? previousMemberState?.muted ?? true : true;
         updateMuteControl();
         renderParticipants();
         sendLocalMemberState();
       }
       syncVoiceEqualizerUI();
       synchronizeAudioInputSelectors();
-      setAudioInputStatus(microphoneSwitchErrorMessage(error), true);
-      if (state.joined) showToast(microphoneSwitchErrorMessage(error), "error");
+      const message = activating
+        ? microphoneErrorMessage(error)
+        : microphoneSwitchErrorMessage(error);
+      reportMicrophoneActivationError(message);
+      return false;
     } finally {
       if (mediaGeneration === state.mediaGeneration) {
         state.switchingMicrophone = false;
         updateAudioInputSelectorState();
+        updateMuteControl();
       }
     }
   }
@@ -1641,7 +1571,6 @@
       const currentTrack = state.localStream?.getAudioTracks()[0];
       state.selectedAudioInputId =
         getTrackDeviceId(currentTrack) || state.selectedAudioInputId;
-      populateAudioInputSelect(dom.microphoneSelect, currentTrack);
       populateAudioInputSelect(dom.roomMicrophoneSelect, currentTrack);
       synchronizeAudioInputSelectors();
       updateAudioInputSelectorState();
@@ -1697,16 +1626,14 @@
   }
 
   function synchronizeAudioInputSelectors() {
-    [dom.microphoneSelect, dom.roomMicrophoneSelect].forEach((select) => {
-      if (
-        state.selectedAudioInputId &&
-        Array.from(select.options).some(
-          (option) => option.value === state.selectedAudioInputId,
-        )
-      ) {
-        select.value = state.selectedAudioInputId;
-      }
-    });
+    if (
+      state.selectedAudioInputId &&
+      Array.from(dom.roomMicrophoneSelect.options).some(
+        (option) => option.value === state.selectedAudioInputId,
+      )
+    ) {
+      dom.roomMicrophoneSelect.value = state.selectedAudioInputId;
+    }
   }
 
   function updateAudioInputSelectorState() {
@@ -1716,31 +1643,23 @@
       !state.enteredWithMicrophone ||
       state.switchingMicrophone ||
       !state.audioInputDevices.length;
-    dom.microphoneSelect.disabled = disabled;
     dom.roomMicrophoneSelect.disabled = disabled;
 
-    if (!state.enteredWithMicrophone) {
+    if (
+      !state.enteredWithMicrophone &&
+      (voiceBlocked || !dom.roomMicrophoneStatus.classList.contains("is-error"))
+    ) {
       setAudioInputStatus(
         voiceBlocked
           ? "O anfitrião desativou o microfone dos participantes nesta sala."
-          : "Você entrou apenas para ouvir. Nenhum microfone está ativo.",
+          : "Use Ativar microfone nos controles da sala para permitir o acesso.",
       );
-    }
-
-    if (
-      !dom.permissionScreen.hidden &&
-      dom.enterRoomButton.getAttribute("aria-busy") !== "true"
-    ) {
-      dom.enterRoomButton.disabled =
-        state.switchingMicrophone || !state.microphoneGranted;
     }
   }
 
   function setAudioInputStatus(message, isError = false) {
-    [dom.microphoneSelectStatus, dom.roomMicrophoneStatus].forEach((target) => {
-      target.textContent = message;
-      target.classList.toggle("is-error", isError);
-    });
+    dom.roomMicrophoneStatus.textContent = message;
+    dom.roomMicrophoneStatus.classList.toggle("is-error", isError);
   }
 
   function scheduleAudioInputRefresh() {
@@ -1772,9 +1691,9 @@
     return "Não foi possível trocar o microfone. A entrada anterior continua ativa.";
   }
 
-  async function enterAsListener() {
-    stopPermissionMeter();
-    stopLocalTracks();
+  function prepareListenerStream() {
+    cancelAllMediaCapture();
+    stopSilentStream();
     state.silentStream = createSilentStream();
     state.localStream = state.silentStream;
     state.microphoneGranted = false;
@@ -1782,13 +1701,19 @@
     state.selectedAudioInputId = "";
     state.audioInputDevices = [];
     state.muted = true;
-    await startPreparedSession(dom.listenOnlyButton);
+    resetMicrophoneControls();
   }
 
-  async function startPreparedSession(triggerButton = dom.enterRoomButton) {
+  async function startPreparedSession(triggerButton) {
+    if (state.entryInProgress) return false;
+    state.entryInProgress = true;
     const actionButton = triggerButton?.dataset
       ? triggerButton
-      : dom.enterRoomButton;
+      : state.mode === "create"
+        ? dom.createRoomButton
+        : dom.joinRoomButton;
+    const entryMode = state.mode;
+    prepareListenerStream();
 
     try {
       if (navigator.onLine === false) {
@@ -1798,15 +1723,11 @@
         );
       }
       resetChat();
-      dom.permissionError.textContent = "";
-      setPermissionActionsDisabled(true);
-      setButtonBusy(
+      setEntryActionsBusy(
         actionButton,
         true,
         state.mode === "create" ? "Criando sala…" : "Procurando sala…",
       );
-      stopPermissionMeter();
-
       if (typeof window.Peer !== "function") {
         throw createAppError(
           "library-unavailable",
@@ -1831,24 +1752,34 @@
       }
 
       await activateRoom();
-    } catch (error) {
-      closeNetworkConnections(false);
-      dom.permissionError.textContent = sessionErrorMessage(error);
-      setPermissionActionsDisabled(false);
-      setButtonBusy(actionButton, false);
-
-      if (
-        state.microphoneGranted &&
-        state.localStream?.getAudioTracks().length
-      ) {
-        dom.permissionInitial.hidden = true;
-        dom.microphoneReady.hidden = false;
-        startPermissionMeter(getProcessedVoiceStream() || state.localStream);
-      } else {
-        dom.permissionInitial.hidden = false;
-        dom.microphoneReady.hidden = true;
+      setEntryActionsBusy(actionButton, false);
+      await waitForRoomPaint();
+      if (state.joined && !state.leaving && isLocalVoiceAllowed()) {
+        void requestMicrophone();
       }
+      return true;
+    } catch (error) {
+      closeNetworkConnections(true);
+      resetMicrophoneControls();
+      setEntryActionsBusy(actionButton, false);
+      const message = sessionErrorMessage(error);
+      if (entryMode === "join") {
+        setFieldError(dom.roomCode, dom.codeError, message);
+      }
+      showScreen("home");
+      showToast(message, "error");
+      return false;
+    } finally {
+      state.entryInProgress = false;
     }
+  }
+
+  function waitForRoomPaint() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(resolve),
+      );
+    });
   }
 
   async function initializeHost() {
@@ -1887,7 +1818,6 @@
         ) {
           if (state.restoring) throw error;
           state.roomCode = generateRoomCode();
-          dom.pendingRoomCode.textContent = formatRoomCode(state.roomCode);
           continue;
         }
 
@@ -1962,7 +1892,6 @@
   function enforceGuestVoicePolicy() {
     if (state.isHost || state.guestsCanSpeak) return;
     stopVoiceMonitor();
-    stopPermissionMeter();
     cancelAllMediaCapture();
     stopSilentStream();
     state.silentStream = createSilentStream();
@@ -4843,7 +4772,6 @@
   async function activateRoom() {
     const restored = state.restoring;
     dom.enableAudioButton.textContent = "Ativar mídia recebida";
-    stopPermissionMeter();
     updateRoomUrl();
     updateRoomDetails();
     renderParticipants();
@@ -5286,12 +5214,7 @@
     }
     const track = state.localStream?.getAudioTracks()[0];
     if (!track || !state.microphoneGranted) {
-      showToast(
-        state.enteredWithMicrophone
-          ? "O microfone atual está indisponível. Escolha outra entrada de áudio."
-          : "Você entrou apenas para ouvir. Saia e entre novamente para usar o microfone.",
-        "error",
-      );
+      void requestMicrophone();
       return;
     }
 
@@ -5312,6 +5235,8 @@
   function updateMuteControl() {
     const voiceBlocked = !isLocalVoiceAllowed();
     const listener = getLocalListenerState();
+    const roomUnavailable = !state.joined || state.restoring;
+    const microphoneBusy = state.switchingMicrophone;
     const microphoneEnabled = !listener && !state.muted;
     dom.muteButton.classList.toggle("is-muted", state.muted && !listener);
     dom.muteButton.classList.toggle("is-listener", listener);
@@ -5319,28 +5244,48 @@
     dom.muteButtonIcon.src = microphoneEnabled
       ? ICON_PATHS.microphoneOn
       : ICON_PATHS.microphoneOff;
-    dom.muteButtonLabel.textContent = listener
-      ? voiceBlocked
-        ? "Voz bloqueada"
-        : "Só ouvindo"
-      : state.muted
-        ? "Ativar"
-        : "Silenciar";
+    dom.muteButtonLabel.textContent = roomUnavailable
+      ? state.restoring
+        ? "Restaurando…"
+        : "Indisponível"
+      : microphoneBusy
+        ? listener
+          ? "Permitindo…"
+          : "Trocando…"
+        : listener
+          ? voiceBlocked
+            ? "Voz bloqueada"
+            : "Ativar"
+          : state.muted
+            ? "Ativar"
+            : "Silenciar";
     dom.muteButton.setAttribute(
       "aria-label",
-      listener
-        ? voiceBlocked
-          ? "O anfitrião não permitiu microfone aos participantes"
-          : "Você entrou sem microfone"
-        : state.muted
-          ? "Ativar microfone"
-          : "Silenciar microfone",
+      roomUnavailable
+        ? state.restoring
+          ? "Restaurando a conexão com a sala"
+          : "Microfone indisponível fora da sala"
+        : microphoneBusy
+          ? listener
+            ? "Aguardando permissão para usar o microfone"
+            : "Trocando o microfone"
+          : listener
+            ? voiceBlocked
+              ? "O anfitrião não permitiu microfone aos participantes"
+              : "Ativar microfone"
+            : state.muted
+              ? "Ativar microfone"
+              : "Silenciar microfone",
     );
     dom.muteButton.setAttribute(
       "aria-pressed",
       String(!listener && state.muted),
     );
-    dom.muteButton.disabled = voiceBlocked;
+    dom.muteButton.setAttribute(
+      "aria-busy",
+      String(microphoneBusy || state.restoring),
+    );
+    dom.muteButton.disabled = voiceBlocked || roomUnavailable || microphoneBusy;
   }
 
   function sendLocalMemberState() {
@@ -5385,9 +5330,6 @@
       renderParticipants();
       updateMuteControl();
       showToast("O microfone foi desconectado.", "error");
-    } else if (!dom.permissionScreen.hidden) {
-      dom.permissionError.textContent =
-        "O microfone foi desconectado. Escolha outra entrada para continuar.";
     }
     setAudioInputStatus(
       "O microfone atual foi desconectado. Escolha outra entrada.",
@@ -5397,51 +5339,6 @@
     syncVoiceEqualizerUI();
     refreshAudioInputDevices();
     saveActiveSession();
-  }
-
-  async function startPermissionMeter(stream) {
-    stopPermissionMeter();
-    const context = await ensureAudioContext();
-    if (!context) return;
-
-    try {
-      state.permissionSource = context.createMediaStreamSource(stream);
-      state.permissionAnalyser = context.createAnalyser();
-      state.permissionAnalyser.fftSize = 256;
-      state.permissionAnalyser.smoothingTimeConstant = 0.74;
-      state.permissionSource.connect(state.permissionAnalyser);
-      const data = new Uint8Array(state.permissionAnalyser.fftSize);
-
-      const draw = () => {
-        if (!state.permissionAnalyser) return;
-        const level = getAudioLevel(state.permissionAnalyser, data);
-        const visualLevel = Math.min(1, 0.08 + level * 4.8);
-        dom.volumeMeterFill.style.transform = `scaleX(${visualLevel})`;
-        dom.volumeMeter.setAttribute(
-          "aria-valuenow",
-          String(Math.round(visualLevel * 100)),
-        );
-        state.permissionMeterFrame = window.requestAnimationFrame(draw);
-      };
-      draw();
-    } catch (_) {
-      dom.volumeMeterFill.style.transform = "scaleX(0.18)";
-    }
-  }
-
-  function stopPermissionMeter() {
-    cancelAnimationFrame(state.permissionMeterFrame);
-    state.permissionMeterFrame = 0;
-    try {
-      state.permissionSource?.disconnect();
-      state.permissionAnalyser?.disconnect();
-    } catch (_) {
-      // Nós de áudio já desconectados.
-    }
-    state.permissionSource = null;
-    state.permissionAnalyser = null;
-    dom.volumeMeterFill.style.transform = "scaleX(0.08)";
-    dom.volumeMeter.setAttribute("aria-valuenow", "0");
   }
 
   async function ensureVoiceEngine(inputStream) {
@@ -6257,7 +6154,7 @@
 
     const finishDeparture = () => {
       closeNetworkConnections(true);
-      resetPermissionUI();
+      resetMicrophoneControls();
       resetSessionIdentity();
       dom.roomCode.value = formatRoomCode(previousCode);
     };
@@ -6271,20 +6168,12 @@
     clearActiveSession();
     closeNetworkConnections(true);
     clearRoomHash();
-    resetPermissionUI();
+    resetMicrophoneControls();
     resetSessionIdentity();
     dom.roomCode.value = formatRoomCode(previousCode);
     showScreen("home");
     document.title = "Cloak — Voz e tela em salas privadas";
     showToast(message, "error");
-  }
-
-  function returnToHomeFromPermission() {
-    clearActiveSession();
-    closeNetworkConnections(true);
-    resetPermissionUI();
-    resetSessionIdentity();
-    showScreen("home");
   }
 
   function notifyDeparture() {
@@ -6405,7 +6294,6 @@
     syncScreenShareStage();
     dom.enableAudioButton.hidden = true;
     dom.enableAudioButton.textContent = "Ativar mídia recebida";
-    stopPermissionMeter();
     if (stopMedia) stopVoiceEngine();
     stopAllAnalysis(stopMedia);
 
@@ -6452,6 +6340,7 @@
     state.guestsCanSpeak = true;
     state.isHost = false;
     state.leaving = false;
+    state.entryInProgress = false;
     state.microphoneGranted = false;
     state.enteredWithMicrophone = false;
     state.selectedAudioInputId = "";
@@ -6475,33 +6364,14 @@
     updateScreenShareControl();
   }
 
-  function resetPermissionUI() {
-    stopPermissionMeter();
-    dom.permissionInitial.hidden = false;
-    dom.microphoneReady.hidden = true;
-    dom.permissionError.textContent = "";
-    dom.microphoneLabel.textContent = "Pronto para usar";
-    dom.microphoneSelect.replaceChildren(
-      createAudioInputOption("", "Microfone atual"),
-    );
+  function resetMicrophoneControls() {
     dom.roomMicrophoneSelect.replaceChildren(
       createAudioInputOption("", "Microfone atual"),
     );
-    dom.microphoneSelect.disabled = true;
     dom.roomMicrophoneSelect.disabled = true;
     setAudioInputStatus(
-      "Escolha qual entrada de áudio será enviada para a sala.",
+      "Use Ativar microfone nos controles da sala para permitir o acesso.",
     );
-    setPermissionActionsDisabled(false);
-    setButtonBusy(dom.allowMicrophoneButton, false);
-    setButtonBusy(dom.listenOnlyButton, false);
-    setButtonBusy(dom.enterRoomButton, false);
-  }
-
-  function setPermissionActionsDisabled(disabled) {
-    dom.allowMicrophoneButton.disabled = disabled;
-    dom.listenOnlyButton.disabled = disabled;
-    dom.enterRoomButton.disabled = disabled;
   }
 
   function setButtonBusy(button, busy, busyText = "Aguarde…") {
@@ -6512,6 +6382,13 @@
     button.innerHTML = busy
       ? `<span>${busyText}</span>`
       : button.dataset.originalHtml;
+  }
+
+  function setEntryActionsBusy(actionButton, busy, busyText = "Aguarde…") {
+    setButtonBusy(actionButton, busy, busyText);
+    [dom.createRoomButton, dom.joinRoomButton].forEach((button) => {
+      if (button !== actionButton) button.disabled = busy;
+    });
   }
 
   function setupGuestRejectedMessage(reason) {
@@ -6560,10 +6437,10 @@
   function microphoneErrorMessage(error) {
     const name = error?.name || error?.message;
     if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-      return "O acesso ao microfone foi bloqueado. Altere a permissão no navegador ou entre apenas para ouvir.";
+      return "O acesso ao microfone foi bloqueado. Altere a permissão no navegador e tente novamente.";
     }
     if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-      return "Nenhum microfone foi encontrado. Conecte um dispositivo ou entre apenas para ouvir.";
+      return "Nenhum microfone foi encontrado. Conecte um dispositivo e tente novamente.";
     }
     if (name === "NotReadableError" || name === "TrackStartError") {
       return "Seu microfone parece estar sendo usado por outro aplicativo. Feche-o e tente novamente.";
@@ -6571,7 +6448,12 @@
     if (name === "OverconstrainedError") {
       return "O microfone não é compatível com as configurações solicitadas.";
     }
-    return "Não foi possível ativar o microfone. Você ainda pode entrar apenas para ouvir.";
+    return "Não foi possível ativar o microfone. Você continua na sala apenas para ouvir.";
+  }
+
+  function reportMicrophoneActivationError(message) {
+    setAudioInputStatus(message, true);
+    if (state.joined && !state.leaving) showToast(message, "error");
   }
 
   function peerErrorMessage(error) {
@@ -6633,8 +6515,7 @@
 
   function showScreen(name) {
     const showingRoom = name === "room";
-    dom.homeScreen.hidden = name !== "home";
-    dom.permissionScreen.hidden = name !== "permission";
+    dom.homeScreen.hidden = showingRoom;
     dom.roomScreen.hidden = !showingRoom;
     dom.roomControls.hidden = !showingRoom;
     dom.copyInviteButton.hidden = !showingRoom;
@@ -6657,10 +6538,6 @@
     if (name === "home") {
       requestAnimationFrame(() =>
         document.querySelector("#home-title")?.focus({ preventScroll: true }),
-      );
-    } else if (name === "permission") {
-      requestAnimationFrame(() =>
-        dom.permissionTitle.focus({ preventScroll: true }),
       );
     } else if (name === "room") {
       requestAnimationFrame(() =>

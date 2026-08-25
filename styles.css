@@ -657,7 +657,7 @@ input[aria-invalid="true"] {
   color: var(--muted-strong);
 }
 
-.permission-footnote {
+.entry-footnote {
   margin: 25px 0 0;
   color: #686d7d;
   font-size: 0.68rem;
@@ -665,191 +665,6 @@ input[aria-invalid="true"] {
   text-align: center;
 }
 
-.permission-screen {
-  position: relative;
-  padding: 44px 0 80px;
-}
-
-.text-button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 9px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 660;
-}
-
-.text-button:hover {
-  color: var(--text);
-}
-
-.back-button {
-  position: absolute;
-  top: 38px;
-  left: 0;
-}
-
-.permission-layout {
-  display: grid;
-  min-height: calc(100vh - 216px);
-  place-items: center;
-}
-
-.permission-card {
-  width: min(100%, 590px);
-  padding: clamp(30px, 5vw, 54px);
-  border-radius: var(--radius-large);
-  text-align: center;
-}
-
-.microphone-illustration {
-  position: relative;
-  width: 112px;
-  height: 112px;
-  margin: 0 auto 31px;
-}
-
-.mic-capsule {
-  position: absolute;
-  z-index: 2;
-  top: 30px;
-  left: 44px;
-  width: 25px;
-  height: 39px;
-  border: 2px solid #e3dfff;
-  border-radius: 18px;
-  background: linear-gradient(
-    rgba(142, 124, 255, 0.23),
-    rgba(102, 227, 208, 0.1)
-  );
-}
-
-.mic-stem {
-  position: absolute;
-  z-index: 2;
-  top: 57px;
-  left: 37px;
-  width: 39px;
-  height: 28px;
-  border-right: 2px solid #e3dfff;
-  border-bottom: 2px solid #e3dfff;
-  border-left: 2px solid #e3dfff;
-  border-radius: 0 0 20px 20px;
-}
-
-.mic-stem::before {
-  position: absolute;
-  bottom: -10px;
-  left: 17px;
-  width: 2px;
-  height: 9px;
-  background: #e3dfff;
-  content: "";
-}
-
-.mic-stem::after {
-  position: absolute;
-  bottom: -11px;
-  left: 11px;
-  width: 14px;
-  height: 2px;
-  border-radius: 9px;
-  background: #e3dfff;
-  content: "";
-}
-
-.mic-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  border: 1px solid rgba(142, 124, 255, 0.26);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.ring-one {
-  width: 82px;
-  height: 82px;
-  background: rgba(142, 124, 255, 0.065);
-}
-
-.ring-two {
-  width: 112px;
-  height: 112px;
-  border-color: rgba(102, 227, 208, 0.11);
-}
-
-.permission-card h1 {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3.1rem);
-  font-weight: 570;
-  letter-spacing: -0.055em;
-}
-
-.permission-description {
-  max-width: 465px;
-  margin: 17px auto 0;
-  color: var(--muted);
-  font-size: 0.93rem;
-  line-height: 1.68;
-}
-
-.room-preview {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  margin: 30px 0;
-  padding: 17px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.room-preview > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 7px;
-  padding: 0 18px;
-}
-
-.room-preview > div + div {
-  border-left: 1px solid var(--line);
-}
-
-.room-preview span {
-  color: #74798a;
-  font-size: 0.66rem;
-}
-
-.room-preview strong {
-  overflow: hidden;
-  color: var(--muted-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#permission-initial,
-.microphone-ready {
-  display: grid;
-  gap: 11px;
-}
-
-.device-picker {
-  display: grid;
-  gap: 8px;
-  padding: 15px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(7, 9, 16, 0.32);
-  text-align: left;
-}
-
-.device-picker label,
 .room-device-card > label {
   color: var(--muted-strong);
   font-size: 0.72rem;
@@ -952,94 +767,6 @@ input[aria-invalid="true"] {
   height: 4px;
   background: currentColor;
   content: "";
-}
-
-.meter-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px;
-  gap: 18px;
-  align-items: center;
-  margin-bottom: 8px;
-  padding: 15px;
-  border: 1px solid rgba(88, 219, 155, 0.14);
-  border-radius: 14px;
-  background: rgba(88, 219, 155, 0.045);
-  text-align: left;
-}
-
-.device-status {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 11px;
-}
-
-.device-check {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(88, 219, 155, 0.13);
-  color: var(--green);
-  font-size: 0.73rem;
-}
-
-.device-status div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.device-status strong {
-  font-size: 0.75rem;
-}
-
-.device-status div span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.63rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.volume-meter {
-  height: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.volume-meter span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--cyan), var(--violet));
-  transform: scaleX(0.08);
-  transform-origin: left;
-  transition: transform 70ms linear;
-}
-
-.permission-error {
-  min-height: 1.3em;
-  margin: 15px 0 0;
-  color: #ff9aa4;
-  font-size: 0.73rem;
-  line-height: 1.5;
-}
-
-.secure-note {
-  margin: 16px 0 0;
-  color: #676c7c;
-  font-size: 0.64rem;
-}
-
-.secure-note span {
-  margin-right: 5px;
-  color: var(--cyan);
 }
 
 .room-screen {
@@ -2401,38 +2128,6 @@ input[aria-invalid="true"] {
     width: 100%;
   }
 
-  .permission-screen {
-    padding-top: 66px;
-  }
-
-  .back-button {
-    top: 9px;
-  }
-
-  .permission-layout {
-    min-height: auto;
-  }
-
-  .permission-card {
-    padding: 31px 20px;
-    border-radius: 22px;
-  }
-
-  .room-preview {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-
-  .room-preview > div + div {
-    padding-top: 15px;
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-
-  .meter-row {
-    grid-template-columns: 1fr;
-  }
-
   .room-screen {
     padding-top: 24px;
   }
@@ -2614,8 +2309,7 @@ body {
   overflow: hidden;
 }
 
-.home-screen,
-.permission-screen {
+.home-screen {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2626,18 +2320,6 @@ body {
   min-height: 100%;
   align-content: center;
   padding: clamp(14px, 4dvh, 44px) 0;
-}
-
-.permission-screen {
-  padding: clamp(12px, 3dvh, 28px) 0;
-}
-
-.permission-layout {
-  min-height: 100%;
-}
-
-.back-button {
-  top: clamp(2px, 1.5dvh, 14px);
 }
 
 .room-screen {
@@ -2900,10 +2582,6 @@ body {
     width: auto;
     padding-right: 14px;
     padding-left: 14px;
-  }
-
-  .permission-screen {
-    padding: clamp(8px, 2dvh, 16px) 0;
   }
 
   .room-screen {
@@ -3206,41 +2884,7 @@ body {
     margin: 14px 0;
   }
 
-  .permission-screen {
-    padding: 7px 0;
-  }
-
-  .permission-card {
-    padding: 18px;
-  }
-
-  .microphone-illustration,
-  #permission-eyebrow,
-  .secure-note {
-    display: none;
-  }
-
-  .permission-description {
-    margin-top: 8px;
-    line-height: 1.45;
-  }
-
-  .room-preview {
-    grid-template-columns: 1fr 1fr;
-    margin: 14px 0;
-  }
-
-  .room-preview > div + div {
-    padding-top: 0;
-    border-top: 0;
-    border-left: 1px solid var(--line);
-  }
-
-  .meter-row {
-    grid-template-columns: minmax(0, 1fr) 86px;
-  }
-
-  .permission-footnote {
+  .entry-footnote {
     margin-top: 10px;
   }
 
@@ -4291,7 +3935,6 @@ body {
 }
 
 .home-screen,
-.permission-screen,
 .chat-messages,
 .participants-grid,
 .create-room-body,
@@ -4302,7 +3945,6 @@ body {
 }
 
 .home-screen,
-.permission-screen,
 .create-room-body,
 .equalizer-body {
   scroll-padding-bottom: max(24px, env(safe-area-inset-bottom));
@@ -4316,11 +3958,9 @@ body {
 .room-overview-grid,
 .room-layout,
 .home-grid,
-.permission-layout,
 .room-chat,
 .participants-panel,
 .entry-card,
-.permission-card,
 .room-overview-grid > *,
 .room-layout > * {
   min-width: 0;
@@ -4636,10 +4276,6 @@ body {
     padding-bottom: max(24px, env(safe-area-inset-bottom));
   }
 
-  .permission-screen {
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-  }
-
   .card-heading h2 {
     margin-top: 14px;
     font-size: 1.55rem;
@@ -4657,14 +4293,6 @@ body {
   .join-row .button {
     width: auto;
     min-width: 76px;
-  }
-
-  .permission-card {
-    padding: 22px 18px;
-  }
-
-  .permission-card h1 {
-    font-size: clamp(1.85rem, 9vw, 2.4rem);
   }
 
   .room-summary-facts span {
@@ -4778,10 +4406,6 @@ body {
   .room-screen {
     padding-top: 4px;
     padding-bottom: max(4px, env(safe-area-inset-bottom));
-  }
-
-  .permission-screen {
-    padding-bottom: max(7px, env(safe-area-inset-bottom));
   }
 
   .room-shell {
