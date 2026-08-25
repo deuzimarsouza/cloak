@@ -22,8 +22,11 @@
     messageSizeLimit: 32768,
     activeSessionKey: "cloak-active-room-v3",
     voiceProfileKey: "cloak-voice-profile-v1",
+    screenShareProfileKey: "cloak-screen-share-profile-v1",
     activeSessionMaxAge: 45000,
     restoreRetryWindow: 45000,
+    screenShareUploadBudget: 8000000,
+    screenShareStatsInterval: 3000,
     peerOptions: {
       debug: 1,
       config: {
@@ -34,6 +37,35 @@
         sdpSemantics: "unified-plan",
       },
     },
+  });
+
+  const SCREEN_SHARE_PROFILES = Object.freeze({
+    480: Object.freeze({
+      label: "480p",
+      width: 854,
+      height: 480,
+      maxBitrates: Object.freeze({ 30: 900000, 60: 1400000 }),
+      adaptiveScales: Object.freeze([1, 1, 1]),
+    }),
+    720: Object.freeze({
+      label: "720p",
+      width: 1280,
+      height: 720,
+      maxBitrates: Object.freeze({ 30: 2000000, 60: 3200000 }),
+      adaptiveScales: Object.freeze([1, 1.5, 1.5]),
+    }),
+    1080: Object.freeze({
+      label: "1080p",
+      width: 1920,
+      height: 1080,
+      maxBitrates: Object.freeze({ 30: 3500000, 60: 5500000 }),
+      adaptiveScales: Object.freeze([1, 1.5, 2.25]),
+    }),
+  });
+  const SCREEN_SHARE_FRAME_RATES = Object.freeze([30, 60]);
+  const DEFAULT_SCREEN_SHARE_SETTINGS = Object.freeze({
+    quality: "720",
+    frameRate: 30,
   });
 
   const ICON_PATHS = Object.freeze({
@@ -161,6 +193,21 @@
     voiceEqualizerLabel: document.querySelector("#voice-equalizer-label"),
     screenShareButton: document.querySelector("#screen-share-button"),
     screenShareLabel: document.querySelector("#screen-share-label"),
+    screenShareDialog: document.querySelector("#screen-share-dialog"),
+    screenShareForm: document.querySelector("#screen-share-form"),
+    screenShareCloseButton: document.querySelector(
+      "#screen-share-close-button",
+    ),
+    screenShareCancelButton: document.querySelector(
+      "#screen-share-cancel-button",
+    ),
+    screenShareQualityOptions: document.querySelector(
+      "#screen-share-quality-options",
+    ),
+    screenShareFrameRate: document.querySelector("#screen-share-frame-rate"),
+    screenShareProfileSummary: document.querySelector(
+      "#screen-share-profile-summary",
+    ),
     screenShareStage: document.querySelector("#screen-share-stage"),
     screenShareGrid: document.querySelector("#screen-share-grid"),
     screenShareCount: document.querySelector("#screen-share-count"),
@@ -233,10 +280,16 @@
     screenStream: null,
     screenCaptureGeneration: 0,
     screenShareStarting: false,
+    screenShareDialogRestoreFocus: true,
     outgoingScreenCalls: new Map(),
     incomingScreenCalls: new Map(),
     pendingScreenCalls: new Map(),
     screenShareRetryState: new Map(),
+    screenShareSettings: readStoredScreenShareSettings(),
+    screenShareSenderStates: new Map(),
+    screenShareAdaptiveLevels: new Map(),
+    screenShareConnectionTimers: new Map(),
+    screenShareStatsTimer: 0,
     remoteScreenVideos: new Map(),
     localScreenPreview: null,
     participantOutputSettings: new Map(),
@@ -895,6 +948,36 @@
     dom.muteButton.addEventListener("click", toggleMute);
     dom.voiceEqualizerButton.addEventListener("click", openVoiceEqualizer);
     dom.screenShareButton.addEventListener("click", toggleScreenShare);
+    dom.screenShareForm.addEventListener(
+      "submit",
+      confirmScreenShareSettings,
+    );
+    dom.screenShareCloseButton.addEventListener("click", () =>
+      closeScreenShareDialog(),
+    );
+    dom.screenShareCancelButton.addEventListener("click", () =>
+      closeScreenShareDialog(),
+    );
+    dom.screenShareQualityOptions.addEventListener(
+      "change",
+      updateScreenShareProfileSummary,
+    );
+    dom.screenShareFrameRate.addEventListener(
+      "change",
+      updateScreenShareProfileSummary,
+    );
+    dom.screenShareDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeScreenShareDialog();
+    });
+    dom.screenShareDialog.addEventListener("click", (event) => {
+      if (event.target === dom.screenShareDialog) closeScreenShareDialog();
+    });
+    dom.screenShareDialog.addEventListener("close", () => {
+      const restoreFocus = state.screenShareDialogRestoreFocus;
+      state.screenShareDialogRestoreFocus = true;
+      if (restoreFocus) focusScreenShareControl();
+    });
     dom.equalizerCloseButton.addEventListener("click", () =>
       dom.equalizerDialog.close(),
     );
@@ -3671,6 +3754,142 @@
     removeAnalysisNode(peerId);
   }
 
+  function normalizeScreenShareSettings(value) {
+    const quality = String(value?.quality || "");
+    const frameRate = Number(value?.frameRate);
+    return {
+      quality: Object.prototype.hasOwnProperty.call(
+        SCREEN_SHARE_PROFILES,
+        quality,
+      )
+        ? quality
+        : DEFAULT_SCREEN_SHARE_SETTINGS.quality,
+      frameRate: SCREEN_SHARE_FRAME_RATES.includes(frameRate)
+        ? frameRate
+        : DEFAULT_SCREEN_SHARE_SETTINGS.frameRate,
+    };
+  }
+
+  function readStoredScreenShareSettings() {
+    try {
+      return normalizeScreenShareSettings(
+        JSON.parse(localStorage.getItem(CONFIG.screenShareProfileKey) || "null"),
+      );
+    } catch (_) {
+      return { ...DEFAULT_SCREEN_SHARE_SETTINGS };
+    }
+  }
+
+  function saveScreenShareSettings(settings) {
+    try {
+      localStorage.setItem(
+        CONFIG.screenShareProfileKey,
+        JSON.stringify(normalizeScreenShareSettings(settings)),
+      );
+    } catch (_) {
+      // A preferência continua válida apenas durante esta sessão.
+    }
+  }
+
+  function getScreenShareProfile(settings = state.screenShareSettings) {
+    return (
+      SCREEN_SHARE_PROFILES[settings.quality] ||
+      SCREEN_SHARE_PROFILES[DEFAULT_SCREEN_SHARE_SETTINGS.quality]
+    );
+  }
+
+  function screenShareProfileLabel(settings = state.screenShareSettings) {
+    const normalized = normalizeScreenShareSettings(settings);
+    return `Até ${getScreenShareProfile(normalized).label} · ${normalized.frameRate} FPS`;
+  }
+
+  function getSelectedScreenShareSettings() {
+    const selectedQuality = dom.screenShareForm.querySelector(
+      'input[name="screen-share-quality"]:checked',
+    )?.value;
+    return normalizeScreenShareSettings({
+      quality: selectedQuality,
+      frameRate: dom.screenShareFrameRate.value,
+    });
+  }
+
+  function syncScreenShareSettingsUI() {
+    const settings = normalizeScreenShareSettings(state.screenShareSettings);
+    const qualityInput = dom.screenShareForm.querySelector(
+      `input[name="screen-share-quality"][value="${settings.quality}"]`,
+    );
+    if (qualityInput) qualityInput.checked = true;
+    dom.screenShareFrameRate.value = String(settings.frameRate);
+    updateScreenShareProfileSummary();
+  }
+
+  function updateScreenShareProfileSummary() {
+    const settings = getSelectedScreenShareSettings();
+    const profile = getScreenShareProfile(settings);
+    const fluidityNote =
+      settings.frameRate === 60
+        ? "60 FPS exige mais processamento e upload."
+        : "30 FPS é recomendado para maior estabilidade.";
+    dom.screenShareProfileSummary.textContent = `${profile.label} até ${profile.width} × ${profile.height}, com limite de ${settings.frameRate} FPS. ${fluidityNote} Se a conexão oscilar, o Cloak reduz temporariamente bitrate, FPS e resolução, usando 480p como o menor perfil-alvo.`;
+  }
+
+  function openScreenShareDialog() {
+    if (!state.joined || state.leaving || state.screenShareStarting) return;
+    if (!isScreenShareSupported()) {
+      showToast(
+        "Este navegador não permite compartilhar tela neste contexto.",
+        "error",
+      );
+      updateScreenShareControl();
+      return;
+    }
+    syncScreenShareSettingsUI();
+    if (typeof dom.screenShareDialog.showModal === "function") {
+      dom.screenShareDialog.showModal();
+    } else {
+      dom.screenShareDialog.setAttribute("open", "");
+    }
+    requestAnimationFrame(() => {
+      dom.screenShareForm
+        .querySelector('input[name="screen-share-quality"]:checked')
+        ?.focus();
+    });
+  }
+
+  function closeScreenShareDialog(restoreFocus = true) {
+    if (
+      !dom.screenShareDialog.open &&
+      !dom.screenShareDialog.hasAttribute("open")
+    ) {
+      return;
+    }
+    state.screenShareDialogRestoreFocus = restoreFocus;
+    if (typeof dom.screenShareDialog.close === "function") {
+      dom.screenShareDialog.close();
+    } else {
+      dom.screenShareDialog.removeAttribute("open");
+      state.screenShareDialogRestoreFocus = true;
+      if (restoreFocus) focusScreenShareControl();
+    }
+  }
+
+  function focusScreenShareControl() {
+    if (dom.roomScreen.hidden || dom.screenShareButton.disabled) return;
+    requestAnimationFrame(() => {
+      if (!dom.roomScreen.hidden && !dom.screenShareButton.disabled) {
+        dom.screenShareButton.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function confirmScreenShareSettings(event) {
+    event.preventDefault();
+    state.screenShareSettings = getSelectedScreenShareSettings();
+    saveScreenShareSettings(state.screenShareSettings);
+    closeScreenShareDialog(false);
+    void startScreenShare();
+  }
+
   function isScreenShareSupported() {
     return Boolean(
       window.isSecureContext &&
@@ -3693,7 +3912,7 @@
       stopScreenShare(true);
       return;
     }
-    void startScreenShare();
+    openScreenShareDialog();
   }
 
   async function startScreenShare() {
@@ -3711,10 +3930,18 @@
     state.screenShareStarting = true;
     updateScreenShareControl();
 
+    const settings = normalizeScreenShareSettings(state.screenShareSettings);
+    const profile = getScreenShareProfile(settings);
+    const videoConstraints = {
+      width: { ideal: profile.width, max: profile.width },
+      height: { ideal: profile.height, max: profile.height },
+      frameRate: { ideal: settings.frameRate, max: settings.frameRate },
+    };
+
     let capture = null;
     try {
       capture = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: videoConstraints,
         audio: false,
         preferCurrentTab: false,
         selfBrowserSurface: "exclude",
@@ -3726,6 +3953,7 @@
       updateScreenShareControl();
       const cancelled = ["AbortError", "NotAllowedError"].includes(error?.name);
       showToast(screenShareErrorMessage(error), cancelled ? "info" : "error");
+      focusScreenShareControl();
       return;
     }
 
@@ -3736,6 +3964,11 @@
       state.pageHiding
     ) {
       capture.getTracks().forEach((track) => track.stop());
+      if (generation === state.screenCaptureGeneration) {
+        state.screenShareStarting = false;
+        updateScreenShareControl();
+        focusScreenShareControl();
+      }
       return;
     }
 
@@ -3745,24 +3978,37 @@
       state.screenShareStarting = false;
       updateScreenShareControl();
       showToast("A fonte escolhida não forneceu uma imagem.", "error");
+      focusScreenShareControl();
       return;
     }
 
     try {
-      videoTrack.contentHint = "detail";
+      videoTrack.contentHint = settings.frameRate === 60 ? "motion" : "detail";
     } catch (_) {
       // A dica de conteúdo não é reconhecida por todos os navegadores.
     }
     if (typeof videoTrack.applyConstraints === "function") {
-      void videoTrack
-        .applyConstraints({
-          width: { max: 1920 },
-          height: { max: 1080 },
-          frameRate: { ideal: 15, max: 30 },
-        })
-        .catch(() => {
-          // A captura continua com a resolução escolhida pelo navegador.
-        });
+      try {
+        await videoTrack.applyConstraints(videoConstraints);
+      } catch (_) {
+        // A captura continua com os limites que o navegador conseguiu aplicar.
+      }
+    }
+
+    if (
+      generation !== state.screenCaptureGeneration ||
+      !state.joined ||
+      state.leaving ||
+      state.pageHiding ||
+      videoTrack.readyState !== "live"
+    ) {
+      capture.getTracks().forEach((track) => track.stop());
+      if (generation === state.screenCaptureGeneration) {
+        state.screenShareStarting = false;
+        updateScreenShareControl();
+        focusScreenShareControl();
+      }
+      return;
     }
 
     state.screenStream = new MediaStream([videoTrack]);
@@ -3780,7 +4026,10 @@
     publishScreenShareToParticipants();
     updateScreenShareControl();
     renderParticipants();
-    showToast(`${screenSurfaceLabel(videoTrack)} compartilhada com a sala.`);
+    showToast(
+      `${screenSurfaceLabel(videoTrack)} compartilhada com limite de ${profile.label} a ${settings.frameRate} FPS.`,
+    );
+    focusScreenShareControl();
   }
 
   function screenShareErrorMessage(error) {
@@ -3822,6 +4071,13 @@
 
     state.screenShareRetryState.forEach(({ timer }) => clearTimeout(timer));
     state.screenShareRetryState.clear();
+    stopScreenShareQualityMonitor();
+    state.screenShareSenderStates.clear();
+    state.screenShareAdaptiveLevels.clear();
+    state.screenShareConnectionTimers.forEach(({ timer }) =>
+      clearTimeout(timer),
+    );
+    state.screenShareConnectionTimers.clear();
     state.outgoingScreenCalls.forEach(safeCloseCall);
     state.outgoingScreenCalls.clear();
     removeLocalScreenPreview();
@@ -3842,6 +4098,16 @@
       "aria-busy",
       String(state.screenShareStarting),
     );
+    if (sharing) {
+      dom.screenShareButton.removeAttribute("aria-haspopup");
+      dom.screenShareButton.removeAttribute("aria-controls");
+    } else {
+      dom.screenShareButton.setAttribute("aria-haspopup", "dialog");
+      dom.screenShareButton.setAttribute(
+        "aria-controls",
+        "screen-share-dialog",
+      );
+    }
     dom.screenShareLabel.textContent = state.screenShareStarting
       ? "Escolhendo…"
       : sharing
@@ -3863,6 +4129,335 @@
     state.participants.forEach((_, peerId) => {
       if (peerId !== state.selfPeerId) placeScreenShareCall(peerId);
     });
+  }
+
+  function getScreenShareVideoSender(call, videoTrack) {
+    const senders = call?.peerConnection?.getSenders?.() || [];
+    return (
+      senders.find((sender) => sender.track === videoTrack) ||
+      senders.find((sender) => sender.track?.kind === "video") ||
+      null
+    );
+  }
+
+  function registerScreenShareSender(peerId, call, attempt = 0) {
+    if (
+      state.outgoingScreenCalls.get(peerId) !== call ||
+      !hasActiveScreenShare()
+    ) {
+      return;
+    }
+    const videoTrack = state.screenStream?.getVideoTracks()[0];
+    const sender = getScreenShareVideoSender(call, videoTrack);
+    if (!sender) {
+      if (attempt < 4) {
+        window.setTimeout(
+          () => registerScreenShareSender(peerId, call, attempt + 1),
+          80 * 2 ** attempt,
+        );
+      }
+      return;
+    }
+
+    const current = state.screenShareSenderStates.get(peerId);
+    state.screenShareSenderStates.set(peerId, {
+      call,
+      sender,
+      level:
+        current?.call === call
+          ? current.level
+          : state.screenShareAdaptiveLevels.get(peerId) || 0,
+      badSamples: 0,
+      goodSamples: 0,
+      updating: false,
+      pendingUpdate: false,
+      parameterAttempts: 0,
+      applyFailures: 0,
+      basicParametersOnly: false,
+      sampling: false,
+    });
+    refreshScreenShareSenderLimits();
+    startScreenShareQualityMonitor();
+  }
+
+  function getScreenShareEncodingLimits(level = 0) {
+    const settings = normalizeScreenShareSettings(state.screenShareSettings);
+    const profile = getScreenShareProfile(settings);
+    const bitrateFactors = [1, 0.72, 0.5];
+    const baseBitrate = profile.maxBitrates[settings.frameRate];
+    const recipientCount = Math.max(1, state.outgoingScreenCalls.size);
+    const perRecipientBudget = Math.floor(
+      CONFIG.screenShareUploadBudget / recipientCount,
+    );
+    const budgetRatio = perRecipientBudget / baseBitrate;
+    const budgetLevel = budgetRatio < 0.55 ? 2 : budgetRatio < 0.8 ? 1 : 0;
+    const safeLevel = Math.max(
+      budgetLevel,
+      Math.max(
+        0,
+        Math.min(profile.adaptiveScales.length - 1, Number(level) || 0),
+      ),
+    );
+    let captureScale = 1;
+    try {
+      const trackSettings = state.screenStream?.getVideoTracks()[0]?.getSettings();
+      captureScale = Math.max(
+        1,
+        Number(trackSettings?.width) / profile.width || 1,
+        Number(trackSettings?.height) / profile.height || 1,
+      );
+    } catch (_) {
+      captureScale = 1;
+    }
+    return {
+      maxBitrate: Math.max(
+        250000,
+        Math.min(
+          Math.round(baseBitrate * bitrateFactors[safeLevel]),
+          perRecipientBudget,
+        ),
+      ),
+      maxFramerate:
+        settings.frameRate === 60 && safeLevel > 0 ? 30 : settings.frameRate,
+      scaleResolutionDownBy: Number(
+        (captureScale * profile.adaptiveScales[safeLevel]).toFixed(3),
+      ),
+    };
+  }
+
+  async function applyScreenShareSenderLimits(peerId, entry) {
+    if (
+      !entry ||
+      state.screenShareSenderStates.get(peerId) !== entry ||
+      state.outgoingScreenCalls.get(peerId) !== entry.call
+    ) {
+      return;
+    }
+    if (entry.updating) {
+      entry.pendingUpdate = true;
+      return;
+    }
+    if (
+      typeof entry.sender.getParameters !== "function" ||
+      typeof entry.sender.setParameters !== "function"
+    ) {
+      return;
+    }
+
+    entry.updating = true;
+    try {
+      const parameters = entry.sender.getParameters();
+      if (!parameters.encodings?.length) {
+        if (entry.parameterAttempts < 4) {
+          entry.parameterAttempts += 1;
+          window.setTimeout(
+            () => void applyScreenShareSenderLimits(peerId, entry),
+            80 * 2 ** (entry.parameterAttempts - 1),
+          );
+        }
+        return;
+      }
+      entry.parameterAttempts = 0;
+      const limits = getScreenShareEncodingLimits(entry.level);
+      parameters.encodings.forEach((encoding) => {
+        encoding.maxBitrate = limits.maxBitrate;
+        if (!entry.basicParametersOnly) {
+          encoding.maxFramerate = limits.maxFramerate;
+          encoding.scaleResolutionDownBy = limits.scaleResolutionDownBy;
+        }
+      });
+      if (!entry.basicParametersOnly) {
+        parameters.degradationPreference = "maintain-framerate";
+      }
+      try {
+        await entry.sender.setParameters(parameters);
+      } catch (error) {
+        if (entry.basicParametersOnly) throw error;
+        entry.basicParametersOnly = true;
+        const fallback = entry.sender.getParameters();
+        if (!fallback.encodings?.length) throw error;
+        fallback.encodings.forEach((encoding) => {
+          encoding.maxBitrate = limits.maxBitrate;
+        });
+        await entry.sender.setParameters(fallback);
+      }
+      entry.applyFailures = 0;
+    } catch (_) {
+      if (entry.applyFailures < 3) {
+        entry.applyFailures += 1;
+        window.setTimeout(
+          () => void applyScreenShareSenderLimits(peerId, entry),
+          250 * 2 ** (entry.applyFailures - 1),
+        );
+      }
+    } finally {
+      entry.updating = false;
+      if (entry.pendingUpdate) {
+        entry.pendingUpdate = false;
+        void applyScreenShareSenderLimits(peerId, entry);
+      }
+    }
+  }
+
+  function refreshScreenShareSenderLimits() {
+    state.screenShareSenderStates.forEach((entry, peerId) => {
+      void applyScreenShareSenderLimits(peerId, entry);
+    });
+  }
+
+  function startScreenShareQualityMonitor() {
+    if (state.screenShareStatsTimer || !state.screenShareSenderStates.size) {
+      return;
+    }
+    state.screenShareStatsTimer = window.setInterval(() => {
+      state.screenShareSenderStates.forEach((entry, peerId) => {
+        void sampleScreenShareSender(peerId, entry);
+      });
+    }, CONFIG.screenShareStatsInterval);
+  }
+
+  function stopScreenShareQualityMonitor() {
+    clearInterval(state.screenShareStatsTimer);
+    state.screenShareStatsTimer = 0;
+  }
+
+  async function sampleScreenShareSender(peerId, entry) {
+    if (
+      state.screenShareSenderStates.get(peerId) !== entry ||
+      state.outgoingScreenCalls.get(peerId) !== entry.call ||
+      entry.sampling
+    ) {
+      return;
+    }
+
+    entry.sampling = true;
+    try {
+      let reports = null;
+      try {
+        if (typeof entry.sender.getStats === "function") {
+          try {
+            reports = await entry.sender.getStats();
+          } catch (senderError) {
+            if (typeof entry.call.peerConnection?.getStats !== "function") {
+              throw senderError;
+            }
+            reports = await entry.call.peerConnection.getStats(
+              entry.sender.track,
+            );
+          }
+        } else if (typeof entry.call.peerConnection?.getStats === "function") {
+          reports = await entry.call.peerConnection.getStats(
+            entry.sender.track,
+          );
+        }
+      } catch (_) {
+        return;
+      }
+
+      if (
+        !reports ||
+        state.screenShareSenderStates.get(peerId) !== entry ||
+        state.outgoingScreenCalls.get(peerId) !== entry.call ||
+        !hasActiveScreenShare()
+      ) {
+        return;
+      }
+
+      let outbound = null;
+      let remoteInbound = null;
+      reports.forEach((report) => {
+        const mediaKind = report.kind || report.mediaType;
+        if (
+          report.type === "outbound-rtp" &&
+          !report.isRemote &&
+          mediaKind === "video"
+        ) {
+          outbound = report;
+        } else if (
+          report.type === "remote-inbound-rtp" &&
+          mediaKind === "video"
+        ) {
+          remoteInbound = report;
+        }
+      });
+      if (!outbound) return;
+
+      const limitationIsKnown =
+        typeof outbound.qualityLimitationReason === "string";
+      const limitationReason = outbound.qualityLimitationReason || "none";
+      const fractionLost = Number(remoteInbound?.fractionLost);
+      const roundTripTime = Number(remoteInbound?.roundTripTime);
+      const lossIsKnown =
+        Number.isFinite(fractionLost) && fractionLost >= 0;
+      const roundTripIsKnown =
+        Number.isFinite(roundTripTime) && roundTripTime >= 0;
+      const healthIsObservable =
+        limitationIsKnown || lossIsKnown || roundTripIsKnown;
+      const constrained =
+        ["bandwidth", "cpu"].includes(limitationReason) ||
+        (lossIsKnown && fractionLost >= 0.05) ||
+        (roundTripIsKnown && roundTripTime >= 0.5);
+      const healthy =
+        healthIsObservable &&
+        (!["bandwidth", "cpu", "other"].includes(limitationReason) ||
+          !limitationIsKnown) &&
+        (!lossIsKnown || fractionLost < 0.02) &&
+        (!roundTripIsKnown || roundTripTime < 0.25);
+
+      if (constrained) {
+        entry.badSamples += 1;
+        entry.goodSamples = 0;
+        if (entry.badSamples >= 2 && entry.level < 2) {
+          entry.level += 1;
+          state.screenShareAdaptiveLevels.set(peerId, entry.level);
+          entry.badSamples = 0;
+          void applyScreenShareSenderLimits(peerId, entry);
+        }
+        return;
+      }
+
+      if (!healthy) {
+        entry.badSamples = 0;
+        entry.goodSamples = 0;
+        return;
+      }
+
+      entry.badSamples = 0;
+      entry.goodSamples += 1;
+      if (entry.goodSamples >= 5 && entry.level > 0) {
+        entry.level -= 1;
+        state.screenShareAdaptiveLevels.set(peerId, entry.level);
+        entry.goodSamples = 0;
+        void applyScreenShareSenderLimits(peerId, entry);
+      }
+    } finally {
+      entry.sampling = false;
+    }
+  }
+
+  function clearScreenShareConnectionTimer(peerId, expectedCall = null) {
+    const pending = state.screenShareConnectionTimers.get(peerId);
+    if (!pending || (expectedCall && pending.call !== expectedCall)) return;
+    clearTimeout(pending.timer);
+    state.screenShareConnectionTimers.delete(peerId);
+  }
+
+  function armScreenShareConnectionTimer(
+    peerId,
+    call,
+    timeout = CONFIG.connectionTimeout,
+  ) {
+    if (state.outgoingScreenCalls.get(peerId) !== call) return;
+    clearScreenShareConnectionTimer(peerId);
+    const timer = window.setTimeout(() => {
+      const pending = state.screenShareConnectionTimers.get(peerId);
+      if (!pending || pending.call !== call || pending.timer !== timer) return;
+      state.screenShareConnectionTimers.delete(peerId);
+      if (state.outgoingScreenCalls.get(peerId) !== call) return;
+      cleanupOutgoingScreenShareCall(peerId, call);
+      safeCloseCall(call);
+    }, timeout);
+    state.screenShareConnectionTimers.set(peerId, { call, timer });
   }
 
   function placeScreenShareCall(peerId) {
@@ -3893,19 +4488,55 @@
         return;
       }
       state.outgoingScreenCalls.set(peerId, call);
+      refreshScreenShareSenderLimits();
       const cleanup = () => cleanupOutgoingScreenShareCall(peerId, call);
       call.on("close", cleanup);
       call.on("error", cleanup);
       const connection = call.peerConnection;
       if (connection?.addEventListener) {
-        const markConnected = () => {
-          if (connection.connectionState !== "connected") return;
-          clearScreenShareRetry(peerId);
-          connection.removeEventListener("connectionstatechange", markConnected);
+        armScreenShareConnectionTimer(peerId, call);
+        const handleConnectionState = () => {
+          if (state.outgoingScreenCalls.get(peerId) !== call) return;
+          const connected =
+            connection.connectionState === "connected" ||
+            ["connected", "completed"].includes(connection.iceConnectionState);
+          if (connected) {
+            clearScreenShareConnectionTimer(peerId, call);
+            clearScreenShareRetry(peerId);
+            const senderState = state.screenShareSenderStates.get(peerId);
+            if (senderState?.call === call) {
+              senderState.parameterAttempts = 0;
+              senderState.applyFailures = 0;
+              senderState.basicParametersOnly = false;
+              void applyScreenShareSenderLimits(peerId, senderState);
+            } else {
+              registerScreenShareSender(peerId, call);
+            }
+            return;
+          }
+          const failed =
+            ["failed", "closed"].includes(connection.connectionState) ||
+            ["failed", "closed"].includes(connection.iceConnectionState);
+          if (failed) {
+            cleanup();
+            safeCloseCall(call);
+            return;
+          }
+          if (
+            connection.connectionState === "disconnected" ||
+            connection.iceConnectionState === "disconnected"
+          ) {
+            armScreenShareConnectionTimer(peerId, call, 5000);
+          }
         };
-        connection.addEventListener("connectionstatechange", markConnected);
-        markConnected();
+        connection.addEventListener(
+          "connectionstatechange",
+          handleConnectionState,
+        );
+        connection.addEventListener("iceconnectionstatechange", handleConnectionState);
+        handleConnectionState();
       }
+      registerScreenShareSender(peerId, call);
     } catch (_) {
       scheduleScreenShareRetry(peerId);
     }
@@ -3913,7 +4544,13 @@
 
   function cleanupOutgoingScreenShareCall(peerId, call) {
     if (state.outgoingScreenCalls.get(peerId) !== call) return;
+    clearScreenShareConnectionTimer(peerId, call);
     state.outgoingScreenCalls.delete(peerId);
+    if (state.screenShareSenderStates.get(peerId)?.call === call) {
+      state.screenShareSenderStates.delete(peerId);
+    }
+    if (state.screenShareSenderStates.size) refreshScreenShareSenderLimits();
+    else stopScreenShareQualityMonitor();
     if (
       hasActiveScreenShare() &&
       state.joined &&
@@ -4067,13 +4704,23 @@
     header.appendChild(presenter);
 
     if (local) {
+      const actions = document.createElement("div");
+      actions.className = "screen-share-card-actions";
+      const profileBadge = document.createElement("span");
+      profileBadge.className = "screen-share-profile-badge";
+      profileBadge.textContent = screenShareProfileLabel();
+      profileBadge.setAttribute(
+        "aria-label",
+        `Limite da transmissão: ${screenShareProfileLabel()}`,
+      );
       const stopButton = document.createElement("button");
       stopButton.className = "screen-share-stop-button";
       stopButton.type = "button";
       stopButton.textContent = "Parar";
       stopButton.setAttribute("aria-label", "Parar seu compartilhamento de tela");
       stopButton.addEventListener("click", () => stopScreenShare(true));
-      header.appendChild(stopButton);
+      actions.append(profileBadge, stopButton);
+      header.appendChild(actions);
     }
 
     const frame = document.createElement("div");
@@ -4147,8 +4794,15 @@
 
   function closeScreenShareForPeer(peerId) {
     clearScreenShareRetry(peerId);
+    state.screenShareAdaptiveLevels.delete(peerId);
     const outgoing = state.outgoingScreenCalls.get(peerId);
+    clearScreenShareConnectionTimer(peerId, outgoing);
     state.outgoingScreenCalls.delete(peerId);
+    if (state.screenShareSenderStates.get(peerId)?.call === outgoing) {
+      state.screenShareSenderStates.delete(peerId);
+      if (state.screenShareSenderStates.size) refreshScreenShareSenderLimits();
+      else stopScreenShareQualityMonitor();
+    }
     safeCloseCall(outgoing);
     const incoming = state.incomingScreenCalls.get(peerId);
     state.incomingScreenCalls.delete(peerId);
@@ -5991,6 +6645,13 @@
       (dom.roomMenuDialog.open || dom.roomMenuDialog.hasAttribute("open"))
     ) {
       closeRoomMenuDialog();
+    }
+    if (
+      !showingRoom &&
+      (dom.screenShareDialog.open ||
+        dom.screenShareDialog.hasAttribute("open"))
+    ) {
+      closeScreenShareDialog();
     }
 
     if (name === "home") {

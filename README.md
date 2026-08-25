@@ -65,7 +65,9 @@ O site é totalmente estático e pode ficar no GitHub Pages. Para que os navegad
 
 Isso não torna a conexão anônima: PeerJS Cloud e os servidores STUN recebem os metadados de rede necessários para estabelecer a chamada, e participantes WebRTC podem receber informações de conectividade. Não use o Cloak como ferramenta de anonimato; o código da sala funciona somente como chave de acesso ao convite.
 
-Ao clicar em **Tela**, o navegador abre o seletor nativo para escolher uma aba, janela ou tela. Por segurança, o Cloak não consegue listar essas fontes nem memorizar a permissão. Uma atualização da página ou saída da sala encerra a transmissão e exige uma nova escolha do usuário.
+Ao clicar em **Tela**, o Cloak permite escolher 480p, 720p ou 1080p e limitar a transmissão a 30 ou 60 FPS antes de abrir o seletor nativo do navegador. O padrão é 720p a 30 FPS, que equilibra nitidez e estabilidade. Esses valores são tetos: a fonte, o navegador, o processador ou a conexão podem entregar menos. Durante congestionamento, o envio reduz bitrate, FPS e resolução gradualmente até o perfil de 480p, recuperando qualidade somente depois que a conexão estabiliza.
+
+Por segurança, o Cloak não consegue listar as abas, janelas ou telas disponíveis nem memorizar a permissão de captura. Uma atualização da página ou saída da sala encerra a transmissão e exige uma nova escolha do usuário.
 
 O criador da sala funciona como coordenador. Se ele atualizar a página ou perder a conexão por alguns instantes, o Cloak tenta recuperar a mesma sala durante uma janela curta. Se o anfitrião clicar em **Sair**, a sala termina imediatamente; se fechar a aba e não retornar, os convidados veem a tentativa de reconexão antes de a sala expirar. O código é a chave de acesso: compartilhe-o apenas com quem deve participar.
 
@@ -74,7 +76,7 @@ O criador da sala funciona como coordenador. Se ele atualizar a página ou perde
 - O PeerJS Cloud é um serviço público compartilhado, adequado para protótipos, sem garantia de disponibilidade para um produto comercial.
 - A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio e a tela. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
 - A sala usa uma malha de conexões entre os navegadores. O limite lógico é de 30 pessoas, mas muitas vozes simultâneas podem sobrecarregar CPU e upload; estabilidade garantida em grupos grandes exige uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
-- Cada tela compartilhada também é enviada uma vez para cada participante. Em salas grandes, prefira resolução moderada; um produto de escala deve encaminhar vídeo por uma SFU.
+- Cada tela compartilhada também é enviada uma vez para cada participante. O Cloak divide um orçamento de upload entre essas cópias para reduzir congestionamento, mas salas grandes ainda devem preferir 480p ou 720p a 30 FPS; um produto de escala deve encaminhar vídeo por uma SFU.
 - A remoção encerra e bloqueia a reconexão automática daquela sessão. Sem contas ou backend, ela não funciona como banimento permanente: alguém com o convite pode tentar entrar novamente em uma nova sessão.
 - Não há contas, moderação persistente nem recuperação da sala após a saída definitiva do criador.
 - Nunca coloque chaves secretas ou credenciais TURN permanentes no JavaScript publicado.

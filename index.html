@@ -34,7 +34,7 @@
       sizes="180x180"
       href="./src/icons/apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=10" />
     <link
       rel="preload"
       as="image"
@@ -51,7 +51,7 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=9"></script>
+    <script defer src="app.js?v=10"></script>
     <script defer src="pwa.js?v=1"></script>
   </head>
   <body>
@@ -130,6 +130,8 @@
             id="screen-share-button"
             aria-label="Compartilhar uma aba, janela ou tela"
             aria-pressed="false"
+            aria-haspopup="dialog"
+            aria-controls="screen-share-dialog"
           >
             <span class="control-icon" aria-hidden="true">
               <span class="screen-share-symbol"></span>
@@ -891,6 +893,116 @@
           </section>
         </div>
       </div>
+    </dialog>
+
+    <dialog
+      class="screen-share-dialog"
+      id="screen-share-dialog"
+      aria-labelledby="screen-share-dialog-title"
+      aria-describedby="screen-share-dialog-description screen-share-profile-summary"
+    >
+      <form class="screen-share-form" id="screen-share-form">
+        <header class="screen-share-dialog-header">
+          <div>
+            <p class="eyebrow">Qualidade da transmissão</p>
+            <h2 id="screen-share-dialog-title">Compartilhar sua tela</h2>
+            <p id="screen-share-dialog-description">
+              Escolha o equilíbrio entre nitidez, fluidez e estabilidade.
+            </p>
+          </div>
+          <button
+            class="screen-share-dialog-close"
+            id="screen-share-close-button"
+            type="button"
+            aria-label="Fechar configurações da transmissão"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </header>
+
+        <div class="screen-share-dialog-body">
+          <fieldset
+            class="screen-share-quality-fieldset"
+            id="screen-share-quality-options"
+          >
+            <legend>Resolução máxima</legend>
+            <div class="screen-share-quality-options">
+              <label class="screen-share-quality-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="screen-share-quality"
+                  value="480"
+                />
+                <span>
+                  <strong>480p</strong>
+                  <small>Menor consumo</small>
+                </span>
+              </label>
+              <label class="screen-share-quality-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="screen-share-quality"
+                  value="720"
+                  checked
+                />
+                <span>
+                  <strong>720p</strong>
+                  <small>Recomendado</small>
+                </span>
+              </label>
+              <label class="screen-share-quality-option">
+                <input
+                  class="visually-hidden"
+                  type="radio"
+                  name="screen-share-quality"
+                  value="1080"
+                />
+                <span>
+                  <strong>1080p</strong>
+                  <small>Mais nitidez</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field-group screen-share-frame-rate-field">
+            <label for="screen-share-frame-rate">Taxa máxima de quadros</label>
+            <div class="select-wrap">
+              <select
+                class="device-select"
+                id="screen-share-frame-rate"
+                name="screenShareFrameRate"
+              >
+                <option value="30" selected>30 FPS — mais estável</option>
+                <option value="60">60 FPS — mais fluido</option>
+              </select>
+              <span class="select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+
+          <p
+            class="screen-share-profile-summary"
+            id="screen-share-profile-summary"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+
+        <div class="screen-share-dialog-actions">
+          <button
+            class="button button-quiet"
+            id="screen-share-cancel-button"
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button class="button button-primary" type="submit">
+            Escolher tela
+          </button>
+        </div>
+      </form>
     </dialog>
 
     <div
