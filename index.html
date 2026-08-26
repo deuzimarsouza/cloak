@@ -10,7 +10,7 @@
       name="description"
       content="Cloak cria salas privadas de voz e compartilhamento de tela no navegador, sem cadastro, com instalação opcional como aplicativo."
     />
-    <meta name="theme-color" content="#090b12" />
+    <meta name="theme-color" content="#1e1f22" />
     <meta name="color-scheme" content="dark" />
     <meta name="application-name" content="Cloak" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -34,7 +34,7 @@
       sizes="180x180"
       href="./src/icons/apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
     <link
       rel="preload"
       as="image"
@@ -346,17 +346,17 @@
             Sala de voz e tela
           </h1>
           <div class="room-shell">
-            <div class="room-layout">
+            <div class="room-layout discord-room-layout">
               <section
-                class="screen-share-stage panel"
+                class="screen-share-stage panel room-stream-stage"
                 id="screen-share-stage"
                 aria-labelledby="screen-share-title"
                 hidden
               >
                 <header class="screen-share-header">
                   <div>
-                    <p class="eyebrow">Transmissão ao vivo</p>
-                    <h2 id="screen-share-title">Telas compartilhadas</h2>
+                    <p class="eyebrow">Transmissão</p>
+                    <h2 id="screen-share-title">Ao vivo</h2>
                   </div>
                   <span class="screen-share-count" id="screen-share-count"
                     >0 telas</span
@@ -368,15 +368,59 @@
                   aria-live="polite"
                 ></div>
               </section>
+
+              <div class="room-voice-column">
+                <section
+                  class="participants-panel panel room-members-panel"
+                  aria-labelledby="participants-title"
+                >
+                  <div class="section-heading">
+                    <div>
+                      <p class="eyebrow">Canal de voz</p>
+                      <h2 id="participants-title">
+                        Na chamada <span id="participant-count">0</span>
+                      </h2>
+                    </div>
+                    <p class="capacity-label">
+                      <span id="capacity-count">0</span>/<span
+                        id="capacity-limit"
+                        >5</span
+                      >
+                      lugares
+                    </p>
+                  </div>
+
+                  <div
+                    class="participants-grid"
+                    id="participants-grid"
+                    tabindex="-1"
+                    aria-label="Lista de participantes"
+                  ></div>
+
+                  <div class="waiting-card" id="waiting-card" hidden>
+                    <div class="waiting-pulse" aria-hidden="true">
+                      <span></span>
+                    </div>
+                    <div>
+                      <strong>Esperando companhia</strong>
+                      <p>
+                        Compartilhe o convite para trazer outras pessoas à
+                        conversa.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
               <section
-                class="room-chat panel"
+                class="room-chat panel room-chat-rail"
                 aria-labelledby="room-chat-title"
                 aria-describedby="room-chat-note"
               >
                 <header class="chat-header">
                   <div>
-                    <p class="eyebrow">Só entre participantes</p>
-                    <h2 id="room-chat-title">Chat temporário</h2>
+                    <p class="eyebrow">Canal de texto</p>
+                    <h2 id="room-chat-title"><span aria-hidden="true">#</span> conversa</h2>
                   </div>
                   <p class="chat-expiry" id="room-chat-note">
                     <span aria-hidden="true"></span>
@@ -531,7 +575,7 @@
                       autocomplete="off"
                       autocapitalize="sentences"
                       enterkeyhint="send"
-                      placeholder="Escreva uma mensagem…"
+                      placeholder="Conversar na sala…"
                       aria-describedby="chat-counter chat-status"
                     ></textarea>
                     <div class="chat-input-meta">
@@ -564,48 +608,6 @@
                 </form>
               </section>
 
-              <div class="room-voice-column">
-                <section
-                  class="participants-panel"
-                  aria-labelledby="participants-title"
-                >
-                  <div class="section-heading">
-                    <div>
-                      <p class="eyebrow">Agora na sala</p>
-                      <h2 id="participants-title">
-                        Participantes <span id="participant-count">0</span>
-                      </h2>
-                    </div>
-                    <p class="capacity-label">
-                      <span id="capacity-count">0</span>/<span
-                        id="capacity-limit"
-                        >5</span
-                      >
-                      lugares
-                    </p>
-                  </div>
-
-                  <div
-                    class="participants-grid"
-                    id="participants-grid"
-                    tabindex="-1"
-                    aria-label="Lista de participantes"
-                  ></div>
-
-                  <div class="waiting-card" id="waiting-card" hidden>
-                    <div class="waiting-pulse" aria-hidden="true">
-                      <span></span>
-                    </div>
-                    <div>
-                      <strong>Esperando companhia</strong>
-                      <p>
-                        Compartilhe o convite para trazer outras pessoas à
-                        conversa.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              </div>
             </div>
           </div>
 
