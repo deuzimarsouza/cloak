@@ -1,6 +1,9 @@
 (function () {
   "use strict";
 
+  const screenAudio = window.CloakScreenAudio;
+  screenAudio.configureCaptureHandle(navigator.mediaDevices, location.origin);
+
   const CONFIG = Object.freeze({
     protocolVersion: 4,
     maxParticipants: 30,
@@ -66,6 +69,7 @@
   const DEFAULT_SCREEN_SHARE_SETTINGS = Object.freeze({
     quality: "720",
     frameRate: 30,
+    shareAudio: true,
   });
 
   const ICON_PATHS = Object.freeze({
@@ -187,6 +191,7 @@
       "#screen-share-quality-options",
     ),
     screenShareFrameRate: document.querySelector("#screen-share-frame-rate"),
+    screenShareAudio: document.querySelector("#screen-share-audio"),
     screenShareProfileSummary: document.querySelector(
       "#screen-share-profile-summary",
     ),
@@ -3696,6 +3701,7 @@
       frameRate: SCREEN_SHARE_FRAME_RATES.includes(frameRate)
         ? frameRate
         : DEFAULT_SCREEN_SHARE_SETTINGS.frameRate,
+      shareAudio: typeof value?.shareAudio === "boolean" ? value.shareAudio : DEFAULT_SCREEN_SHARE_SETTINGS.shareAudio,
     };
   }
 
@@ -3739,6 +3745,7 @@
     return normalizeScreenShareSettings({
       quality: selectedQuality,
       frameRate: dom.screenShareFrameRate.value,
+      shareAudio: dom.screenShareAudio.checked,
     });
   }
 
@@ -3749,6 +3756,7 @@
     );
     if (qualityInput) qualityInput.checked = true;
     dom.screenShareFrameRate.value = String(settings.frameRate);
+    dom.screenShareAudio.checked = settings.shareAudio;
     updateScreenShareProfileSummary();
   }
 
@@ -3869,13 +3877,10 @@
 
     let capture = null;
     try {
-      capture = await navigator.mediaDevices.getDisplayMedia({
-        video: videoConstraints,
-        audio: false,
-        preferCurrentTab: false,
-        selfBrowserSurface: "exclude",
-        surfaceSwitching: "include",
-      });
+      capture = await navigator.mediaDevices.getDisplayMedia(
+        screenAudio.captureOptions(videoConstraints, settings.shareAudio,
+          navigator.mediaDevices.getSupportedConstraints?.() || {}),
+      );
     } catch (error) {
       if (generation !== state.screenCaptureGeneration) return;
       state.screenShareStarting = false;
@@ -3940,7 +3945,17 @@
       return;
     }
 
-    state.screenStream = new MediaStream([videoTrack]);
+    const capturedAudio = screenAudio.selectCaptureAudio(capture, settings.shareAudio);
+    state.screenStream = new MediaStream([videoTrack, ...capturedAudio.tracks]);
+    // If a supporting browser changes the source identity, do not rebroadcast the call.
+    videoTrack.addEventListener("capturehandlechange", () => {
+      for (const track of capturedAudio.tracks) {
+        if (!screenAudio.isIsolated(videoTrack, track)) {
+          track.stop();
+          state.localScreenPreview?.screenAudioRefresh?.();
+        }
+      }
+    });
     state.screenShareStarting = false;
     videoTrack.addEventListener(
       "ended",
@@ -3956,7 +3971,11 @@
     updateScreenShareControl();
     renderParticipants();
     showToast(
-      `${screenSurfaceLabel(videoTrack)} compartilhada com limite de ${profile.label} a ${settings.frameRate} FPS.`,
+      `${screenSurfaceLabel(videoTrack)} compartilhada com limite de ${profile.label} a ${settings.frameRate} FPS. ${
+        capturedAudio.reason === "ready" ? "Som da transmissão ativado; vozes separadas." :
+        capturedAudio.reason === "unsafe" ? "Som não enviado para evitar retorno da chamada. Compartilhe uma aba com áudio." :
+        capturedAudio.reason === "unavailable" ? "A fonte não forneceu som. Selecione uma aba e marque Compartilhar áudio no navegador." : "Sem áudio da transmissão."
+      }`,
     );
     focusScreenShareControl();
   }
@@ -4569,9 +4588,16 @@
     }
 
     const current = state.remoteScreenVideos.get(peerId);
-    if (current?.call === call && current.videoTrack === videoTrack) return;
-    removeRemoteScreenShare(peerId);
-    const safeStream = new MediaStream([videoTrack]);
+    if (current?.call === call && current.videoTrack === videoTrack) {
+      if (current.stream !== stream) {
+        current.stream = stream;
+        current.screenAudioOutput.setStream(stream);
+      }
+      return;
+    }
+    removeRemoteScreenShare(peerId, null, new Set(stream.getTracks()));
+    // One video element plays the screen stream. Never send it to the voice output.
+    const safeStream = stream;
     const entry = createScreenShareCard(peerId, safeStream, false);
     entry.call = call;
     entry.videoTrack = videoTrack;
@@ -4657,7 +4683,8 @@
     const video = document.createElement("video");
     video.autoplay = true;
     video.playsInline = true;
-    video.muted = local;
+    video.muted = true;
+    video.defaultMuted = true;
     video.controls = !local;
     video.srcObject = stream;
     video.setAttribute(
@@ -4668,7 +4695,56 @@
     );
     frame.appendChild(video);
     card.append(header, frame);
-    return { card, video, badge, stream };
+    const entry = { card, video, badge, stream };
+    addScreenAudioControls(entry, presenterName, local);
+    return entry;
+  }
+
+  function addScreenAudioControls(entry, presenterName, local) {
+    const controls = document.createElement("div");
+    controls.className = "screen-audio-controls";
+    const status = document.createElement("span");
+    status.className = "screen-audio-status";
+    status.setAttribute("role", "status");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "screen-audio-toggle";
+    toggle.hidden = local;
+    const volumeLabel = document.createElement("label");
+    volumeLabel.className = "screen-audio-volume";
+    volumeLabel.hidden = local;
+    const label = document.createElement("span");
+    label.textContent = "Volume da tela";
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = "0"; range.max = "100"; range.step = "1"; range.value = "100";
+    range.setAttribute("aria-label", `Volume da transmissão de ${presenterName}`);
+    const value = document.createElement("output");
+    value.textContent = "100%";
+    volumeLabel.append(label, range, value);
+    controls.append(toggle, volumeLabel, status);
+    entry.card.appendChild(controls);
+    const update = (output) => {
+      toggle.disabled = !output.available;
+      toggle.textContent = !output.available ? "Sem áudio" : output.blocked ? "Tentar ouvir" : output.enabled ? "Silenciar tela" : "Ouvir transmissão";
+      toggle.setAttribute("aria-label", `${toggle.textContent}: ${presenterName}`);
+      toggle.setAttribute("aria-pressed", String(output.enabled && !output.blocked));
+      range.disabled = !output.available;
+      range.value = String(Math.round(output.volume * 100));
+      value.textContent = `${range.value}%`;
+      range.setAttribute("aria-valuetext", value.textContent);
+      status.textContent = local
+        ? output.available ? "Som enviado • sua prévia fica muda" : "Transmissão sem som"
+        : !output.available ? "O apresentador não está enviando som." : output.blocked
+          ? "Clique para liberar o áudio." : "Vozes e som da tela têm volumes separados.";
+    };
+    entry.screenAudioOutput = screenAudio.createOutput(entry.video, entry.stream, {
+      local, onChange: update,
+      onBlocked: (blocked) => { if (!local) markRemoteMediaPlayback(entry.video, blocked); },
+    });
+    entry.screenAudioRefresh = () => update(entry.screenAudioOutput.snapshot());
+    toggle.addEventListener("click", () => void entry.screenAudioOutput.toggle());
+    range.addEventListener("input", () => entry.screenAudioOutput.setVolume(Number(range.value) / 100));
   }
 
   function addLocalScreenPreview(stream, videoTrack) {
@@ -4700,19 +4776,23 @@
   function removeLocalScreenPreview() {
     const entry = state.localScreenPreview;
     if (!entry) return;
+    entry.screenAudioOutput?.dispose();
     entry.video.pause();
     entry.video.srcObject = null;
     entry.card.remove();
     state.localScreenPreview = null;
   }
 
-  function removeRemoteScreenShare(peerId, expectedCall = null) {
+  function removeRemoteScreenShare(peerId, expectedCall = null, retainedTracks = new Set()) {
     const entry = state.remoteScreenVideos.get(peerId);
     if (!entry || (expectedCall && entry.call !== expectedCall)) return false;
+    entry.screenAudioOutput?.dispose();
     state.blockedRemoteMedia.delete(entry.video);
     entry.video.pause();
     entry.video.srcObject = null;
-    entry.stream.getTracks().forEach((track) => track.stop());
+    entry.stream.getTracks().forEach((track) => {
+      if (!retainedTracks.has(track)) track.stop();
+    });
     entry.card.remove();
     state.remoteScreenVideos.delete(peerId);
     updateMediaUnlockControl();

@@ -389,3 +389,21 @@ body.room-active {
   .room-active .room-shell:has(.chat-input-shell:focus-within) .room-chat { min-height: 0; height: 100%; }
 }
 @media (max-width:370px) { .room-active .site-header .brand > span:last-child { display: none; } }
+/* Independent screen sound controls. The same video owns audio playback. */
+.screen-share-audio-option { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid #4b3b60; border-radius: 12px; background: #281f35; cursor: pointer; }
+.screen-share-audio-option input { width: 19px; height: 19px; min-height: 0; margin: 2px 0 0; accent-color: #b499ff; flex-shrink: 0; }
+.screen-share-audio-option strong { display: block; font-size: 13px; color: #ecdefe; }
+.screen-share-audio-option small { display: block; margin-top: 6px; color: #bdafcc; font-size: 11px; line-height: 1.6; }
+.room-active .screen-share-card { grid-template-rows: auto minmax(60px,1fr) auto; }
+.screen-audio-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 14px; padding: 10px 12px; border-top: 1px solid #3d304d; background: #1e1828; }
+.screen-audio-toggle { min-height: 34px; border: 1px solid #796294; border-radius: 8px; padding: 6px 11px; background: #3a2a50; color: #ebd9ff; font-size: 11px; }
+.screen-audio-toggle[aria-pressed="true"] { color: #b8efda; background: #1f3a32; border-color: #3c7763; }
+.screen-audio-volume { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #bdaed0; }
+.screen-audio-volume input { width: 80px; height: 24px; min-height: 0; padding: 0; accent-color: #b499ff; }
+.screen-audio-volume output { min-width: 30px; }
+.screen-audio-status { color: #aa9abb; font-size: 9px; line-height: 1.5; }
+@media (max-width:700px) {
+  .room-active .room-layout.has-screen-share { grid-template-rows: 330px 145px minmax(300px,1fr); }
+  .screen-audio-controls { gap: 6px 10px; padding: 8px; }
+  .screen-audio-volume > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}

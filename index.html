@@ -35,7 +35,7 @@
       href="./src/icons/apple-touch-icon.png"
     />
     <link rel="stylesheet" href="styles.css?v=14" />
-    <link rel="stylesheet" href="studio.css?v=1" />
+    <link rel="stylesheet" href="studio.css?v=2" />
     <link
       rel="preload"
       as="image"
@@ -52,7 +52,8 @@
       integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
       crossorigin="anonymous"
     ></script>
-    <script defer src="app.js?v=12"></script>
+    <script defer src="screen-audio.js?v=1"></script>
+    <script defer src="app.js?v=13"></script>
     <script defer src="pwa.js?v=1"></script>
     <script defer src="studio.js?v=1"></script>
   </head>
@@ -869,6 +870,12 @@
               <span class="select-arrow" aria-hidden="true">⌄</span>
             </div>
           </div>
+
+          <label class="screen-share-audio-option">
+            <input type="checkbox" id="screen-share-audio" checked aria-describedby="screen-share-audio-hint" />
+            <span><strong>Compartilhar som da transmissão</strong><small>Os convidados escolhem se querem ouvir e ajustam o volume da tela.</small></span>
+          </label>
+          <p class="field-hint" id="screen-share-audio-hint">Prefira uma aba e marque “Compartilhar áudio” no seletor do navegador. Se o som não puder ser separado da chamada, somente a imagem será transmitida. Use fones para reduzir o retorno pelo microfone.</p>
 
           <p
             class="screen-share-profile-summary"

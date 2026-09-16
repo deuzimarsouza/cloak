@@ -9,7 +9,7 @@ O projeto recebeu uma interface inspirada em streaming e conversa em grupo: tema
 - A ilustração da página inicial é identificada como prévia; não representa pessoas ou transmissões conectadas.
 - O nome e o estado de conexão da sala aparecem no novo cabeçalho.
 - O cache da PWA inclui os novos arquivos e uma nova versão.
-- A lógica original de voz, salas, convite e compartilhamento foi mantida; em `app.js`, somente a atualização dos novos rótulos de interface foi acrescentada.
+- A lógica de salas, convites e voz foi mantida. O compartilhamento agora também transporta áudio isolado, conforme descrito abaixo.
 
 **Para atualizar:** envie todo o conteúdo desta pasta para a hospedagem, incluindo `studio.css` e `studio.js`. Feche as abas e janelas antigas do Cloak e abra novamente para permitir a ativação da nova versão da PWA.
 
@@ -42,6 +42,24 @@ O Cloak é um chat de voz com compartilhamento de tela que funciona direto no na
 - instalação como aplicativo (PWA) no computador ou celular;
 - abertura da interface sem internet, com aviso claro de que as salas exigem conexão;
 - publicação automática no GitHub Pages.
+
+## Som da transmissão + vozes dos convidados
+
+1. Na sala, clique em **Tela** e deixe marcada a opção **Compartilhar som da transmissão**.
+2. Prefira selecionar uma **aba** que reproduza o conteúdo e marque **Compartilhar áudio** no seletor do navegador.
+3. Cada convidado clica em **Ouvir transmissão**, abaixo do vídeo. O controle **Volume da tela** altera somente esse conteúdo; o volume das vozes continua nos cartões dos participantes. **Silenciar tela** não silencia os convidados.
+
+Quem apresenta continua ouvindo o conteúdo na fonte original. A prévia local do Cloak fica sempre muda, sem retorno duplicado. Cada transmissão recebida reproduz som em um único elemento de vídeo; não há uma segunda saída de áudio nem mistura com o microfone. O áudio de tela não passa pelo equalizador de voz.
+
+O som geral do computador pode incluir as vozes da própria chamada. Por isso, ele só é solicitado quando o navegador oferece `restrictOwnAudio`; o áudio de janela/tela só é encaminhado se a configuração da trilha confirmar esse isolamento. Sem essa confirmação, a imagem continua, mas o som é descartado e o Cloak avisa para compartilhar uma aba. A aba atual é excluída do seletor quando o navegador suporta essa opção; abas Cloak identificadas por Capture Handle também têm o áudio recusado. Para trocar de fonte com som, encerre e inicie o compartilhamento novamente.
+
+O suporte à captura de áudio varia por navegador, fonte e sistema operacional. Use fones para reduzir o som dos alto-falantes recapturado pelo microfone: cancelamento de eco já está ativo, mas nenhum aplicativo garante eliminar todo retorno acústico. A origem compartilhada deve ser o conteúdo, não outra instância da mesma chamada.
+
+**Atualização necessária para todos:** quem transmite e quem assiste deve carregar esta versão. Versões anteriores descartavam o áudio recebido da tela. Feche as abas/janelas antigas da PWA e reabra após publicar todos os arquivos.
+
+**Validação:** 12 testes automatizados em `tests/screen-audio.test.cjs` verificam isolamento, saída única, independência do volume, bloqueio de autoplay, prévia local, trilhas adicionadas/removidas, troca de stream e descarte de callbacks antigos. Execute `node --test tests/screen-audio.test.cjs`. São testes com mídia simulada; ainda é necessário conferir a reprodução real entre dois dispositivos e a aparência no navegador.
+
+Referências técnicas: [controles de compartilhamento](https://developer.chrome.com/docs/web-platform/screen-sharing-controls), [restrictOwnAudio](https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackSettings/restrictOwnAudio), [Capture Handle](https://developer.chrome.com/docs/web-platform/capture-handle).
 
 ## Executar localmente
 
@@ -103,6 +121,8 @@ index.html                    interface e conteúdo
 styles.css                    estilos e estados originais
 studio.css                    nova interface Studio e responsividade
 studio.js                     atalhos da interface e ajuda
+screen-audio.js               isolamento da captura e saída única de som
+tests/screen-audio.test.cjs    testes automatizados com mídia simulada
 app.js                        salas, microfone, WebRTC e estados
 pwa.js                        instalação e registro do service worker
 manifest.webmanifest          identidade e configuração do aplicativo
