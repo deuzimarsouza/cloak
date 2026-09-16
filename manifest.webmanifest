@@ -7,9 +7,12 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#090b12",
-  "theme_color": "#090b12",
-  "categories": ["social", "utilities"],
+  "background_color": "#0c0d14",
+  "theme_color": "#0c0d14",
+  "categories": [
+    "social",
+    "utilities"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {

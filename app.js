@@ -4814,6 +4814,7 @@
       ? "Sua sala"
       : "Sala compartilhada";
     dom.roomTitle.textContent = state.roomName || "Sala de voz e tela";
+    document.querySelector("#studio-room-name").textContent = state.roomName || "Sua sala";
     dom.roomScreenTitle.textContent = state.roomName || "Sala de voz e tela";
     dom.roomCapacitySummary.textContent = `${state.roomCapacity} lugares`;
     dom.roomVoicePolicySummary.textContent = state.guestsCanSpeak
@@ -6547,6 +6548,8 @@
   }
 
   function setConnectionStatus(status, label) {
+    document.querySelector("#studio-connection").dataset.status = status;
+    document.querySelector("#studio-connection span").textContent = label;
     dom.connectionStatus.dataset.status = status;
     dom.connectionStatusText.textContent = label;
     dom.copyInviteButton.dataset.status = status;

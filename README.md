@@ -1,5 +1,20 @@
 # Cloak
 
+## Interface Studio — atualização de 16/09/2026
+
+O projeto recebeu uma interface inspirada em streaming e conversa em grupo: tema escuro com detalhes em violeta, navegação lateral, uma nova tela de entrada, palco de transmissão, participantes em uma faixa própria e chat lateral com balões de mensagem. No celular, os painéis são empilhados; ao focar o campo de mensagem, o chat ganha espaço.
+
+- `studio.css` concentra o novo visual e os ajustes responsivos.
+- `studio.js` conecta os atalhos visuais aos controles existentes e abre a ajuda.
+- A ilustração da página inicial é identificada como prévia; não representa pessoas ou transmissões conectadas.
+- O nome e o estado de conexão da sala aparecem no novo cabeçalho.
+- O cache da PWA inclui os novos arquivos e uma nova versão.
+- A lógica original de voz, salas, convite e compartilhamento foi mantida; em `app.js`, somente a atualização dos novos rótulos de interface foi acrescentada.
+
+**Para atualizar:** envie todo o conteúdo desta pasta para a hospedagem, incluindo `studio.css` e `studio.js`. Feche as abas e janelas antigas do Cloak e abra novamente para permitir a ativação da nova versão da PWA.
+
+**Verificação desta atualização:** sintaxe dos arquivos JavaScript, preservação dos 122 IDs originais, referências locais, vínculos de acessibilidade, integridade do PeerJS e versões do cache. A revisão visual no navegador e chamadas reais entre dispositivos não foram executadas neste ambiente.
+
 O Cloak é um chat de voz com compartilhamento de tela que funciona direto no navegador. Uma pessoa configura e cria a sala, recebe um código automático e compartilha o convite. As demais entram pelo código ou pelo link, e cada permissão de microfone ou tela é solicitada pelo próprio navegador.
 
 ## O que já está pronto
@@ -85,7 +100,9 @@ O criador da sala funciona como coordenador. Se ele atualizar a página ou perde
 
 ```text
 index.html                    interface e conteúdo
-styles.css                    identidade visual e responsividade
+styles.css                    estilos e estados originais
+studio.css                    nova interface Studio e responsividade
+studio.js                     atalhos da interface e ajuda
 app.js                        salas, microfone, WebRTC e estados
 pwa.js                        instalação e registro do service worker
 manifest.webmanifest          identidade e configuração do aplicativo
