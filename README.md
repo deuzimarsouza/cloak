@@ -43,6 +43,41 @@ O Cloak é um chat de voz com compartilhamento de tela que funciona direto no na
 - abertura da interface sem internet, com aviso claro de que as salas exigem conexão;
 - publicação automática no GitHub Pages.
 
+## Correção de entrada por link e código — 16/09/2026
+
+A revisão encontrou uma configuração ICE personalizada que substituía os padrões do PeerJS 1.5.5 e removia seus servidores TURN públicos. O aplicativo agora preserva esses padrões. Isso recupera uma alternativa de conexão entre redes diferentes, mas não comprova a causa exata de uma falha em um dispositivo específico nem garante disponibilidade dos servidores públicos.
+
+Também foram corrigidos:
+
+- timeout de transporte distinguido de sala inexistente; janela de conexão ampliada para 30 segundos;
+- encerramento do canal, falha no envio da solicitação e rejeição na confirmação final com tratamento imediato;
+- diagnóstico de versões incompatíveis entre anfitrião e convidado;
+- leitura de links com código em `#room=` ou `?room=`, inclusive valores codificados;
+- preferência pelo código do fragmento quando um link também traz um parâmetro antigo;
+- códigos inválidos ou compridos rejeitados, sem remover letras ou truncar até virar outro código;
+- convite para outra sala respeitado antes de restaurar a sessão anterior;
+- validação dos metadados antes da admissão;
+- falha no carregamento do recurso opcional de áudio da tela não derruba a inicialização das salas.
+
+### Aplicar esta atualização
+
+1. Publique **todo o conteúdo** desta pasta, mantendo a estrutura. Não é necessário criar outro repositório.
+2. Anfitrião e participantes devem fechar **todas as abas e janelas instaladas do Cloak** e abrir o site novamente para atualizar a PWA. Se ainda aparecer uma versão antiga, limpe os dados do site e reabra.
+3. Crie uma sala nova na versão atualizada, mantenha o anfitrião conectado e envie o novo convite.
+4. Confira primeiro entre dois dispositivos. Se uma rede falhar, compare com outra (por exemplo Wi-Fi e dados móveis) e anote a mensagem completa de erro.
+
+### O que foi verificado
+
+**27 testes automatizados passaram:** 15 de conexão/admissão e 12 de áudio. Os testes de conexão executam as funções reais de `app.js` em contextos separados de anfitrião/convidado com transporte simulado. Eles cobrem criação, entrada por código/link, sala cheia, canal encerrado, host ausente, timeout, versões diferentes e convites inválidos. Foram conferidos sintaxe JavaScript, recursos locais, IDs únicos, referências de acessibilidade, hash SRI do PeerJS e versões do cache.
+
+Execute todos os testes com `node --test tests/*.test.cjs`.
+
+**Publicação verificada em 17/09/2026:** o GitHub Pages publicou o commit `a76d152e17b70b2ceca779955c6d32f0e8f0054d`, que ainda carregava `app.js?v=13` com configuração somente STUN. O conteúdo era idêntico ao envio anterior. Esta correção usa `app.js?v=14` e atualiza o cache da PWA; ela só chega aos participantes depois de ser publicada e carregada nos dois dispositivos.
+
+**Limite da verificação:** não houve teste real entre navegadores/redes. A conferência da publicação foi feita pelos arquivos do repositório e pelo resultado do workflow do GitHub Pages. TURN público pode estar indisponível, bloqueado ou insuficiente. Para confiabilidade de produção, use um serviço TURN próprio com credenciais temporárias fornecidas por backend; não publique segredos de provedores no JavaScript.
+
+Referência: [PeerJS — limitações de rede e TURN](https://peerjs.com/client/faq).
+
 ## Som da transmissão + vozes dos convidados
 
 1. Na sala, clique em **Tela** e deixe marcada a opção **Compartilhar som da transmissão**.
@@ -107,7 +142,7 @@ O criador da sala funciona como coordenador. Se ele atualizar a página ou perde
 ## Limites deste MVP
 
 - O PeerJS Cloud é um serviço público compartilhado, adequado para protótipos, sem garantia de disponibilidade para um produto comercial.
-- A configuração usa STUN público. Algumas redes corporativas, redes móveis restritas e NATs simétricos podem impedir o áudio e a tela. Confiabilidade de produção exige um servidor TURN com credenciais temporárias.
+- A configuração preserva STUN e os relays TURN públicos incluídos no PeerJS 1.5.5. A disponibilidade deles não é garantida; redes restritas ainda podem impedir a conexão. Confiabilidade de produção exige TURN próprio com credenciais temporárias.
 - A sala usa uma malha de conexões entre os navegadores. O limite lógico é de 30 pessoas, mas muitas vozes simultâneas podem sobrecarregar CPU e upload; estabilidade garantida em grupos grandes exige uma SFU como LiveKit, Jitsi, Janus ou mediasoup.
 - Cada tela compartilhada também é enviada uma vez para cada participante. O Cloak divide um orçamento de upload entre essas cópias para reduzir congestionamento, mas salas grandes ainda devem preferir 480p ou 720p a 30 FPS; um produto de escala deve encaminhar vídeo por uma SFU.
 - A remoção encerra e bloqueia a reconexão automática daquela sessão. Sem contas ou backend, ela não funciona como banimento permanente: alguém com o convite pode tentar entrar novamente em uma nova sessão.
@@ -123,6 +158,7 @@ studio.css                    nova interface Studio e responsividade
 studio.js                     atalhos da interface e ajuda
 screen-audio.js               isolamento da captura e saída única de som
 tests/screen-audio.test.cjs    testes automatizados com mídia simulada
+tests/connection.test.cjs      testes do protocolo com transporte simulado
 app.js                        salas, microfone, WebRTC e estados
 pwa.js                        instalação e registro do service worker
 manifest.webmanifest          identidade e configuração do aplicativo

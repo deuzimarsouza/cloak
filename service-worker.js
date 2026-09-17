@@ -2,7 +2,7 @@
 
 const CACHE_PREFIX = "cloak-shell-";
 // Mude esta versão sempre que qualquer item de APP_SHELL mudar.
-const CACHE_VERSION = "2026-09-16-screen-audio-1";
+const CACHE_VERSION = "2026-09-16-connection-1";
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const NAVIGATION_TIMEOUT = 4000;
 const APP_SCOPE = new URL(self.registration.scope);
@@ -16,7 +16,7 @@ const APP_SHELL = [
   new URL("./studio.css?v=2", self.registration.scope).href,
   new URL("./studio.js?v=1", self.registration.scope).href,
   new URL("./vendor/peerjs.min.js?v=1.5.5", self.registration.scope).href,
-  new URL("./app.js?v=13", self.registration.scope).href,
+  new URL("./app.js?v=14", self.registration.scope).href,
   new URL("./screen-audio.js?v=1", self.registration.scope).href,
   new URL("./pwa.js?v=1", self.registration.scope).href,
   new URL("./voice-effects-processor.js?v=1", self.registration.scope).href,

@@ -1,0 +1,69 @@
+CLOAK — CORREÇÃO DE CONEXÃO v14 — 17/09/2026
+
+O link e o código do print foram reconhecidos. Na verificação do GitHub,
+a última publicação ainda usava app.js?v=13: os arquivos enviados em
+17/09 eram idênticos aos do envio anterior. A versão antiga mostra
+"sala não encontrada" também quando a conexão demora a se estabelecer.
+
+COMO PUBLICAR ESTE PACOTE
+
+1. Extraia este ZIP em uma pasta nova para evitar confundir os arquivos
+   com downloads anteriores. Abra a pasta cloak-conexao-v14 extraída.
+
+2. Abra https://github.com/deuzimarsouza/cloak na branch main.
+   Use Add file > Upload files. Envie os ARQUIVOS E SUBPASTAS de dentro
+   de cloak-conexao-v14 para a raiz do repositório, substituindo os atuais.
+   index.html, app.js e service-worker.js devem ficar na mesma posição
+   dos arquivos atuais. O GitHub não descompacta um ZIP enviado ao site.
+   Não crie outra pasta cloak-conexao-v14 dentro do repositório.
+
+3. Revise as alterações e conclua o commit. Se usar uma branch nova,
+   conclua também o pull request para main. A atualização só publica
+   quando os arquivos corrigidos estiverem na branch main.
+
+4. Na aba Actions, aguarde o novo "pages build and deployment" terminar
+   com sucesso. Confira o index.html da branch main: ele deve conter
+   src="app.js?v=14". Um workflow verde ainda pode publicar arquivos
+   antigos se o upload tiver usado uma cópia anterior.
+
+5. Anfitrião e convidado devem fechar todas as abas e janelas instaladas
+   do Cloak. Abram o site novamente após a publicação. Se houver versão
+   antiga em cache, limpem os dados do site e reabram.
+
+6. Crie uma sala nova, mantenha a sala do anfitrião aberta e conectada,
+   e envie o novo convite. Teste a entrada de um segundo dispositivo.
+
+SE A ENTRADA AINDA FALHAR
+
+Registre a mensagem completa e uma imagem da tela do anfitrião mostrando
+a sala e seu estado de conexão. Compare uma tentativa pelo Wi-Fi e outra
+pelos dados móveis. Uma sala depende de quem a criou continuar conectado.
+
+O QUE FOI CORRIGIDO
+
+- Recuperação dos servidores TURN incluídos no PeerJS para permitir
+  uma alternativa de conexão entre redes diferentes.
+- Tempo de conexão ampliado e erros específicos para rede, canal fechado,
+  host indisponível e versões incompatíveis.
+- Tratamento de links, códigos e confirmação de entrada.
+- Atualização do cache da PWA junto com o app.js.
+
+Os 27 testes automatizados passaram (15 de conexão e 12 de áudio).
+Conexão e mídia foram simuladas; não houve validação real entre duas redes.
+A disponibilidade do TURN público não foi confirmada neste ambiente.
+A interface Studio e o áudio da transmissão estão incluídos.
+
+EVIDÊNCIAS E REFERÊNCIAS
+
+Publicação inspecionada:
+https://github.com/deuzimarsouza/cloak/actions/runs/35214488010
+
+Arquivos publicados antes desta correção:
+https://github.com/deuzimarsouza/cloak/tree/a76d152e17b70b2ceca779955c6d32f0e8f0054d
+
+Upload de arquivos no GitHub:
+https://docs.github.com/en/repositories/working-with-files/managing-files/adding-a-file-to-a-repository
+
+NOTA: a integração disponível recusou a gravação no GitHub (403,
+"Resource not accessible by integration"). Este pacote está pronto,
+mas a publicação precisa ser concluída na sua conta.

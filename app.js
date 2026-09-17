@@ -2,7 +2,7 @@
   "use strict";
 
   const screenAudio = window.CloakScreenAudio;
-  screenAudio.configureCaptureHandle(navigator.mediaDevices, location.origin);
+  screenAudio?.configureCaptureHandle(navigator.mediaDevices, location.origin);
 
   const CONFIG = Object.freeze({
     protocolVersion: 4,
@@ -13,8 +13,8 @@
     roomCodeLength: 12,
     roomAlphabet: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
     peerPrefix: "cloak-room-",
-    connectionTimeout: 12000,
-    joinTimeout: 10000,
+    connectionTimeout: 30000,
+    joinTimeout: 15000,
     pendingCallTimeout: 1800,
     maxChatLength: 300,
     maxChatMessages: 200,
@@ -30,16 +30,9 @@
     restoreRetryWindow: 45000,
     screenShareUploadBudget: 8000000,
     screenShareStatsInterval: 3000,
-    peerOptions: {
-      debug: 1,
-      config: {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-        ],
-        sdpSemantics: "unified-plan",
-      },
-    },
+    // Keep the bundled PeerJS ICE defaults, including its public TURN relays.
+    // A custom config containing only STUN replaces (and removes) those relays.
+    peerOptions: { debug: 1, secure: true },
   });
 
   const SCREEN_SHARE_PROFILES = Object.freeze({
@@ -402,7 +395,12 @@
     resetParticipantOutputSettings();
     updateScreenShareControl();
     applyInviteFromHash();
-    const activeSession = readActiveSession();
+    let activeSession = readActiveSession();
+    const invitedRoom = extractRoomCodeInput(location.href);
+    if (activeSession && isValidRoomCode(invitedRoom) && invitedRoom !== activeSession.roomCode) {
+      clearActiveSession();
+      activeSession = null;
+    }
     if (activeSession && navigator.onLine !== false) {
       void restoreActiveSession(activeSession);
     } else {
@@ -1963,58 +1961,55 @@
       let connection;
       let settled = false;
       let timer = 0;
-
-      try {
-        connection = peer.connect(hostPeerId, {
-          reliable: true,
-          serialization: "json",
-          metadata: {
-            type: "cloak-control",
-            version: CONFIG.protocolVersion,
-            roomCode: state.roomCode,
-          },
-        });
-      } catch (error) {
-        reject(error);
-        return;
-      }
-
       const cleanup = () => {
         clearTimeout(timer);
         removeEmitterListener(peer, "error", handlePeerError);
+        removeEmitterListener(peer, "disconnected", handleDisconnected);
       };
-
       const fail = (error) => {
         if (settled) return;
         settled = true;
         cleanup();
-        try {
-          connection.close();
-        } catch (_) {
-          // A conexão já pode estar fechada.
-        }
+        safeCloseCall(connection);
         reject(error);
       };
-
+      const handleDisconnected = () => fail(createAppError("network", "O serviço de salas foi desconectado."));
       const handlePeerError = (error) => {
+        // Errors from a different media call must not cancel this admission.
+        if (error?.peer && error.peer !== hostPeerId) return;
         if (error?.type === "peer-unavailable") {
-          fail(createAppError("room-not-found", "Sala não encontrada."));
+          fail(createAppError("room-not-found", "O anfitrião não está disponível."));
+        } else if (["network", "server-error", "socket-error", "socket-closed", "disconnected", "webrtc"].includes(error?.type)) {
+          fail(error);
         }
       };
-
-      connection.on("open", () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(connection);
-      });
-      connection.on("error", fail);
       peer.on("error", handlePeerError);
-
-      timer = window.setTimeout(
-        () => fail(createAppError("room-not-found", "Sala não encontrada.")),
-        CONFIG.connectionTimeout,
-      );
+      peer.on("disconnected", handleDisconnected);
+      try {
+        connection = peer.connect(hostPeerId, {
+          reliable: true,
+          serialization: "json",
+          metadata: { type: "cloak-control", version: CONFIG.protocolVersion, roomCode: state.roomCode },
+        });
+        if (!connection) {
+          fail(createAppError("connection-closed", "O canal de entrada não foi criado."));
+          return;
+        }
+        // A Peer implementation may report an error synchronously in connect().
+        if (settled) { safeCloseCall(connection); return; }
+        const opened = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(connection);
+        };
+        connection.on("open", opened);
+        connection.on("error", fail);
+        connection.on("close", () => fail(createAppError("connection-closed", "O canal fechou antes da entrada.")));
+        if (connection.open) { opened(); return; }
+        timer = window.setTimeout(() => fail(createAppError("rtc-timeout",
+          "Não foi possível estabelecer uma conexão entre os dispositivos.")), CONFIG.connectionTimeout);
+      } catch (error) { fail(error); }
     });
   }
 
@@ -2043,7 +2038,7 @@
         },
       };
 
-      sendControl(connection, {
+      if (!sendControl(connection, {
         type: "join",
         version: CONFIG.protocolVersion,
         roomCode: state.roomCode,
@@ -2051,7 +2046,9 @@
         muted: state.muted,
         listener: getLocalListenerState(),
         resumeToken: state.resumeToken,
-      });
+      })) {
+        state.pendingJoin?.reject(createAppError("connection-closed", "A solicitação de entrada não pôde ser enviada."));
+      }
     });
   }
 
@@ -2142,8 +2139,11 @@
   function setupHostControlConnection(connection) {
     const metadata = connection.metadata || {};
     let joinTimer = 0;
+    let admissionAllowed = false;
 
     const reject = (reason, message) => {
+      admissionAllowed = false;
+      clearTimeout(joinTimer);
       if (connection.open) {
         sendControl(connection, {
           type: "rejected",
@@ -2167,9 +2167,11 @@
         metadata.version !== CONFIG.protocolVersion ||
         normalizeRoomCode(metadata.roomCode) !== state.roomCode
       ) {
-        reject("invalid-room", "Convite inválido.");
+        reject(metadata.version !== CONFIG.protocolVersion ? "version-mismatch" : "invalid-room",
+          metadata.version !== CONFIG.protocolVersion ? "Atualize o Cloak nos dois dispositivos." : "Convite inválido.");
         return;
       }
+      admissionAllowed = true;
 
       joinTimer = window.setTimeout(
         () => reject("join-timeout", "A entrada não foi concluída."),
@@ -2181,7 +2183,7 @@
     else connection.on("open", beginAdmission);
 
     connection.on("data", (message) => {
-      if (!isSafeControlMessage(message)) return;
+      if (!admissionAllowed || !isSafeControlMessage(message)) return;
       handleHostControlMessage(
         connection,
         message,
@@ -2406,11 +2408,12 @@
 
   function setupGuestControlConnection(connection) {
     connection.on("data", (message) => {
-      if (
-        !isSafeControlMessage(message) ||
-        message.version !== CONFIG.protocolVersion
-      )
+      if (!isSafeControlMessage(message)) return;
+      if (message.version !== CONFIG.protocolVersion) {
+        const pending = state.pendingReady || state.pendingJoin;
+        if (pending?.connection === connection) pending.reject(createAppError("version-mismatch", "Atualize o Cloak nos dois dispositivos."));
         return;
+      }
       if (
         message.roomCode &&
         normalizeRoomCode(message.roomCode) !== state.roomCode
@@ -2444,7 +2447,7 @@
         );
       } else if (state.pendingJoin?.connection === connection) {
         state.pendingJoin.reject(
-          createAppError("room-not-found", "Não foi possível entrar."),
+          createAppError("connection-closed", "A conexão foi interrompida durante a entrada."),
         );
       } else if (state.joined && !state.leaving) {
         scheduleGuestReconnect();
@@ -2589,16 +2592,11 @@
       return;
     }
 
-    if (
-      message.type === "rejected" &&
-      state.pendingJoin?.connection === connection
-    ) {
-      state.pendingJoin.reject(
-        createAppError(
-          message.reason || "join-rejected",
-          message.message || "Entrada recusada.",
-        ),
-      );
+    if (message.type === "rejected") {
+      const pending = state.pendingReady || state.pendingJoin;
+      if (pending?.connection === connection) {
+        pending.reject(createAppError(message.reason || "join-rejected", message.message || "Entrada recusada."));
+      }
       return;
     }
 
@@ -3829,7 +3827,7 @@
 
   function isScreenShareSupported() {
     return Boolean(
-      window.isSecureContext &&
+      screenAudio && window.isSecureContext &&
         navigator.mediaDevices &&
         typeof navigator.mediaDevices.getDisplayMedia === "function",
     );
@@ -4591,7 +4589,7 @@
     if (current?.call === call && current.videoTrack === videoTrack) {
       if (current.stream !== stream) {
         current.stream = stream;
-        current.screenAudioOutput.setStream(stream);
+        current.screenAudioOutput?.setStream(stream);
       }
       return;
     }
@@ -4701,6 +4699,8 @@
   }
 
   function addScreenAudioControls(entry, presenterName, local) {
+    // A missing optional audio asset must not prevent joining or voice calls.
+    if (!screenAudio) { entry.video.muted = true; entry.video.controls = false; return; }
     const controls = document.createElement("div");
     controls.className = "screen-audio-controls";
     const status = document.createElement("span");
@@ -6479,6 +6479,7 @@
       duplicate: "Você já está conectado a esta sala.",
       "join-timeout": "A entrada não foi concluída a tempo.",
       "invalid-member": "O nome ou os dados de entrada são inválidos.",
+      "version-mismatch": "Atualize o Cloak nos dois dispositivos antes de entrar.",
       removed: "Você foi removido pelo anfitrião.",
     };
     return messages[reason] || "A entrada na sala foi recusada.";
@@ -6492,6 +6493,15 @@
     if (code === "room-not-found" || code === "peer-unavailable") {
       return "Não encontramos essa sala. Confira o código e veja se quem criou ainda está conectado.";
     }
+    if (code === "rtc-timeout" || code === "webrtc") {
+      return "O convite foi processado, mas os dispositivos não conseguiram se conectar. Mantenha a sala aberta e tente outra rede (Wi-Fi ou dados móveis).";
+    }
+    if (code === "connection-closed" || code === "disconnected") {
+      return "A conexão foi interrompida durante a entrada. Mantenha a sala do anfitrião aberta e tente novamente.";
+    }
+    if (code === "version-mismatch") {
+      return "Os dispositivos estão usando versões diferentes do Cloak. Feche todas as abas do aplicativo e abra novamente nos dois dispositivos.";
+    }
     if (code === "room-full")
       return error?.message || setupGuestRejectedMessage(code);
     if (code === "removed") return setupGuestRejectedMessage(code);
@@ -6503,7 +6513,7 @@
     if (code === "library-unavailable") {
       return "O serviço de conexão não carregou. Verifique sua internet e recarregue a página.";
     }
-    if (["network", "server", "socket-error"].includes(code)) {
+    if (["network", "server", "server-error", "socket-error", "socket-closed"].includes(code)) {
       return "Não foi possível acessar o serviço de salas. Verifique sua internet e tente novamente.";
     }
     if (code === "browser-incompatible") {
@@ -6865,17 +6875,25 @@
   }
 
   function normalizeRoomCode(value) {
-    return String(value || "")
-      .toUpperCase()
-      .replace(/[^A-Z2-9]/g, "")
-      .replace(/[IO]/g, "")
-      .slice(0, CONFIG.roomCodeLength);
+    // Remove formatting only. Never turn an invalid/long code into another valid code.
+    return String(value || "").trim().toUpperCase().replace(/[\s\u2010-\u2015-]/g, "");
   }
 
   function extractRoomCodeInput(value) {
-    const text = String(value || "");
-    const inviteMatch = text.match(/(?:#|[?&])room=([A-Z0-9-]+)/i);
-    return normalizeRoomCode(inviteMatch ? inviteMatch[1] : text);
+    const text = String(value || "").trim();
+    if (/^https?:\/\//i.test(text)) {
+      try {
+        const url = new URL(text);
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+        return normalizeRoomCode(hash.get("room") || url.searchParams.get("room") || "");
+      } catch (_) { return ""; }
+    }
+    const inviteMatch = text.match(/(?:#|[?&])room=([^&#\s]*)/i);
+    if (inviteMatch) {
+      try { return normalizeRoomCode(decodeURIComponent(inviteMatch[1])); }
+      catch (_) { return ""; }
+    }
+    return normalizeRoomCode(text);
   }
 
   function formatRoomCode(code) {
@@ -7004,25 +7022,29 @@
 
   function createInviteUrl() {
     const url = new URL(location.href);
+    url.searchParams.delete("room");
     url.hash = `room=${state.roomCode}`;
     return url.toString();
   }
 
   function updateRoomUrl() {
     const url = new URL(location.href);
+    url.searchParams.delete("room");
     url.hash = `room=${state.roomCode}`;
     history.replaceState(null, "", url);
   }
 
   function clearRoomHash() {
     const url = new URL(location.href);
+    url.searchParams.delete("room");
     url.hash = "";
     history.replaceState(null, "", url);
   }
 
   function applyInviteFromHash() {
-    const params = new URLSearchParams(location.hash.replace(/^#/, ""));
-    const code = normalizeRoomCode(params.get("room") || "");
+    const url = new URL(location.href);
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const code = normalizeRoomCode(hashParams.get("room") || url.searchParams.get("room") || "");
     if (!isValidRoomCode(code)) return;
     dom.roomCode.value = formatRoomCode(code);
     dom.inviteArrival.hidden = false;
