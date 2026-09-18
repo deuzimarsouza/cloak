@@ -20,19 +20,10 @@ body { background: var(--bg); }
 button, a, input, textarea { transition: background-color .18s, border-color .18s, box-shadow .18s, color .18s; }
 button:disabled { cursor: not-allowed; }
 .studio-icon { width: 21px; height: 21px; flex: 0 0 auto; vertical-align: middle; }
-.studio-rail { position: fixed; inset: 0 auto 0 0; z-index: 40; width: 80px; display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 22px 12px; background: #10111a; border-right: 1px solid #242431; }
-.rail-emblem { display: grid; place-items: center; position: relative; height: 42px; width: 42px; border-radius: 14px; background: #ae96ff; color: #171126; font: 800 38px/1 system-ui; padding-bottom: 6px; }
-.rail-emblem span { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff; right: 9px; top: 19px; }
-.rail-links { display: flex; flex-direction: column; gap: 14px; padding-top: 16px; border-top: 1px solid #2c2a3a; }
-.rail-button { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid transparent; border-radius: 14px; color: #88899e; background: transparent; }
-.rail-button:hover { background: #22212e; color: #dfd4ff; }
-.rail-button.is-current { color: #c2aeff; background: #29213e; border-color: #433259; }
-.rail-help { margin-top: auto; }
-.rail-caption { writing-mode: vertical-rl; font-size: 9px; letter-spacing: .25em; color: #67697c; }
 .room-only { display: none; }
 .room-active .room-only { display: grid; }
 .room-active .home-only { display: none; }
-.app-shell, .room-active .app-shell { width: calc(100% - 80px); margin-left: 80px; padding: 0; background: var(--bg); grid-template-rows: calc(80px + env(safe-area-inset-top)) minmax(0,1fr); }
+.app-shell, .room-active .app-shell { width: 100%; margin-left: 0; padding: 0; background: var(--bg); grid-template-rows: calc(80px + env(safe-area-inset-top)) minmax(0,1fr); }
 .site-header, .room-active .site-header { width: 100%; max-width: none; height: calc(80px + env(safe-area-inset-top)); min-height: 0; padding: env(safe-area-inset-top) 36px 0; gap: 20px; border-bottom: 1px solid var(--line); background: #0f1018; box-shadow: none; }
 .brand, .room-active .brand { font-size: 25px; letter-spacing: -.06em; font-weight: 750; gap: 8px; }
 .brand-mark, .room-active .brand-mark { display: none; }
@@ -46,7 +37,7 @@ button:disabled { cursor: not-allowed; }
 .install-app-button { margin-left: 0; min-height: 36px; border-radius: 10px; font-size: 11px; background: #1d1a2c; border-color: #373045; }
 .app-shell > main { max-width: none; }
 .home-screen { padding: 0 clamp(24px, 4vw, 64px); background: radial-gradient(ellipse at 27% 30%, #1c142533, transparent 62%); }
-.home-grid { width: 100%; max-width: 1300px; min-height: 0; margin: 0 auto; padding: 56px 0 44px; display: grid; grid-template-columns: minmax(0, 1.28fr) minmax(340px, .85fr); align-items: center; gap: clamp(32px,5vw,86px); }
+.home-screen .home-grid { width: 100%; max-width: 520px; min-height: 100%; margin: 0 auto; padding: clamp(24px, 5dvh, 56px) 0 max(24px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; align-items: center; justify-items: center; gap: 0; }
 .hero-copy { width: 100%; max-width: none; padding: 0; }
 .studio-eyebrow { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: .16em; color: #b4a8ca; margin-bottom: 20px; }
 .studio-dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: #b499ff; box-shadow: 0 0 14px #b499ff80; }
@@ -90,12 +81,13 @@ button:disabled { cursor: not-allowed; }
 .floating-message .studio-icon { color: #b69ae8; width: 15px; height: 15px; }
 .floating-message > span { color: #debeff; }
 .entry-card.panel { position: relative; width: 100%; max-width: none; padding: 30px; border: 1px solid #323040; border-radius: 20px; background: linear-gradient(150deg,#1b1b29,#13141f 65%); box-shadow: 0 20px 70px #0003; }
+.entry-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; color: var(--text); font: 750 28px/1.1 system-ui, sans-serif; letter-spacing: -.06em; }
+.entry-logo-mark { display: grid; place-items: center; position: relative; flex: 0 0 46px; height: 46px; border-radius: 14px; background: #ae96ff; color: #171126; font: 800 40px/1 system-ui, sans-serif; letter-spacing: normal; padding-bottom: 6px; }
+.entry-logo-mark span { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff; right: 10px; top: 21px; }
 .entry-card:before { content: ''; position: absolute; top: -1px; left: 25%; right: 25%; height: 1px; background: linear-gradient(90deg,transparent,#b79ae7,transparent); }
-.entry-symbol { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 24px; border: 1px solid #4b3c65; border-radius: 14px; background: #2b233e; color: #c9b0ff; }
-.entry-symbol .studio-icon { width: 23px; height: 23px; }
 .status-chip { padding: 0; border: none; background: none; color: #a89abf; font-size: 8px; letter-spacing: .12em; }
 .status-chip i { display: none; }
-.card-heading h2 { font-size: clamp(22px,2vw,29px); line-height: 1.18; font-weight: 650; letter-spacing: -.04em; margin: 12px 0 10px; }
+.card-heading :is(h1, h2) { font-size: clamp(22px,2vw,29px); line-height: 1.18; font-weight: 650; letter-spacing: -.04em; margin: 12px 0 10px; }
 .card-heading p { font-size: 12px; color: #9997ad; margin-bottom: 26px; }
 .field-group label { font-size: 11px; font-weight: 600; color: #cac5d9; }
 input, select, textarea { border-color: #323041; border-radius: 10px; background: #0f101a; color: var(--text); }
@@ -258,8 +250,7 @@ body.room-active {
   .room-active .room-layout, .room-active .room-layout.has-screen-share { grid-template-columns: minmax(0,1fr) 300px; gap: 12px; }
 }
 @media (max-width: 900px) {
-  .studio-rail { width: 64px; padding-inline: 9px; }
-  .app-shell, .room-active .app-shell { width: calc(100% - 64px); margin-left: 64px; }
+  .app-shell, .room-active .app-shell { width: 100%; margin-left: 0; }
   .site-header, .room-active .site-header { padding-inline: 24px; }
   .header-context, .header-divider, .private-chip { display: none; }
   .home-screen { padding-inline: 26px; }
@@ -270,7 +261,6 @@ body.room-active {
   .studio-preview { max-width: none; }
   .preview-scene { height: 220px; }
   .entry-card.panel { padding: 28px; }
-  .entry-symbol { float: right; }
   .feature-grid { gap: 10px; }
   .feature-card { padding: 18px 13px; }
   .room-active .site-header { gap: 12px; }
@@ -281,7 +271,6 @@ body.room-active {
   .studio-lounge p { font-size: 11px; }
 }
 @media (max-width: 700px) {
-  .studio-rail { display: none; }
   .app-shell, .room-active .app-shell { width: 100%; margin: 0; grid-template-rows: calc(66px + env(safe-area-inset-top)) minmax(0,1fr); }
   .site-header, .room-active .site-header { height: calc(66px + env(safe-area-inset-top)); padding-inline: 20px; gap: 12px; }
   .brand, .room-active .brand { font-size: 23px; }
@@ -303,8 +292,7 @@ body.room-active {
   .floating-message { right: -7px; font-size: 9px; padding: 11px 12px; }
   .preview-footer { font-size: 8px; }
   .entry-card.panel { padding: 24px; }
-  .card-heading h2 { font-size: 25px; max-width: 240px; }
-  .entry-symbol { width: 38px; height: 38px; margin-left: 10px; }
+  .card-heading :is(h1, h2) { font-size: 25px; max-width: 240px; }
   .features-heading { align-items: start; }
   .features-heading h2 { font-size: 16px; }
   .features-heading > span { display: none; }
@@ -353,7 +341,6 @@ body.room-active {
   .home-screen { padding-inline: 16px; }
   .hero-copy h1 { font-size: 35px; }
   .entry-card.panel { padding: 20px; }
-  .entry-symbol { display: none; }
   .room-active .brand > span:last-child { display: none; }
   .room-active .brand-mark { display: grid; width: 26px; height: 26px; border-radius: 8px; background: #b799f2; color: #1d122e; font: 750 25px/1 system-ui; padding-bottom: 5px; }
   .room-active .site-header { gap: 5px; padding-inline: 9px; }
@@ -407,3 +394,9 @@ body.room-active {
   .screen-audio-controls { gap: 6px 10px; padding: 8px; }
   .screen-audio-volume > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
+
+/* The entry screen occupies the full viewport; call controls appear in rooms. */
+.site-header.room-only { display: none; }
+.room-active .site-header.room-only { display: flex; }
+body:not(.room-active) .app-shell { grid-template-rows: minmax(0, 1fr); }
+.home-screen .home-grid { padding-block: max(24px, env(safe-area-inset-top), env(safe-area-inset-bottom)); }

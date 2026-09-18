@@ -1,5 +1,19 @@
 # Cloak
 
+## Página inicial sem cabeçalho — 18/09/2026
+
+A página inicial exibe apenas `entry-card panel`, com o logo, centralizado horizontal e verticalmente na tela. O cabeçalho é exclusivo da sala para manter seus controles de voz, transmissão e saída. A entrada usa toda a altura da tela, com rolagem em telas pequenas. Esta entrega usa `studio.css?v=5` e o cache `2026-09-18-home-card-1`.
+
+## Logo no formulário e remoção da lateral — 18/09/2026
+
+A barra `studio-rail` foi removida. O símbolo e o nome Cloak aparecem no topo de `entry-card panel`, substituindo o ícone de fones. A página e a sala ocupam toda a largura disponível, sem o recuo da lateral. Os atalhos JavaScript da barra removida também foram retirados. Esta entrega usa `studio.css?v=4`, `studio.js?v=2` e o cache `2026-09-18-home-logo-1`.
+
+## Página inicial simplificada — 18/09/2026
+
+A página inicial agora exibe apenas o formulário `entry-card panel`, centralizado e responsivo. O bloco `hero-copy` e os blocos promocionais foram removidos. O título do formulário passa a identificar a página e receber o foco ao voltar para o início. As correções de conexão e os controles de áudio anteriores estão preservados.
+
+Publique o conteúdo da pasta `cloak-main` deste pacote na raiz do repositório. Esta atualização carrega `studio.css?v=3` e usa o cache `2026-09-18-home-entry-1`. Veja `ATUALIZAR.txt`.
+
 ## Interface Studio — atualização de 16/09/2026
 
 O projeto recebeu uma interface inspirada em streaming e conversa em grupo: tema escuro com detalhes em violeta, navegação lateral, uma nova tela de entrada, palco de transmissão, participantes em uma faixa própria e chat lateral com balões de mensagem. No celular, os painéis são empilhados; ao focar o campo de mensagem, o chat ganha espaço.

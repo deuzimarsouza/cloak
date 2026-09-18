@@ -13,12 +13,5 @@
     const rect = help.getBoundingClientRect();
     if (event.target === help && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) help.close();
   });
-  document.querySelector('#studio-home').addEventListener('click', () => document.querySelector('#brand-link').click());
-  document.querySelector('#studio-join').addEventListener('click', () => {
-    const input = document.querySelector('#room-code');
-    input.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    input.focus({ preventScroll: true });
-  });
-  document.querySelector('#studio-room-info').addEventListener('click', () => document.querySelector('#copy-invite-button').click());
   document.querySelector('#studio-share').addEventListener('click', () => document.querySelector('#screen-share-button').click());
 })();

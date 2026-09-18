@@ -1,0 +1,17 @@
+CLOAK — CARD CENTRALIZADO, SEM CABEÇALHO NA ENTRADA — 18/09/2026
+
+1. Extraia cloak-card-centralizado.zip e abra a pasta cloak-main.
+2. Envie o conteúdo dessa pasta para a raiz do repositório deuzimarsouza/cloak,
+   substituindo os arquivos existentes e mantendo as subpastas.
+3. Conclua o commit na branch main e aguarde a publicação na aba Actions.
+4. Feche todas as abas e janelas instaladas do Cloak e reabra o site.
+
+A página inicial exibe somente entry-card panel, com o logo, centralizado
+na largura e na altura da tela. A lateral e os blocos promocionais foram
+removidos. O cabeçalho aparece apenas dentro das salas com os controles
+de voz, transmissão e saída.
+
+O index.html carrega studio.css?v=5 e studio.js?v=2.
+O cache é 2026-09-18-home-card-1.
+O JavaScript de conexão continua em app.js?v=14, com as correções anteriores.
+A publicação no GitHub não foi realizada por esta entrega.
