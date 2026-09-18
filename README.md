@@ -1,5 +1,21 @@
 # Cloak
 
+## Sala responsiva para celular e tablet — 18/09/2026
+
+- Em janelas de até 1100 px e dispositivos com toque como entrada principal, os controles de microfone, voz, tela, saída e ativação da mídia recebida ficam no menu hambúrguer existente.
+- O botão **Chat**, no canto inferior direito, abre a conversa em um painel próprio. Em celulares ele ocupa a tela; em tablets, ocupa até 680 px da lateral direita. **Voltar**, Escape ou um toque no fundo externo fecham o painel.
+- Um contador no botão indica mensagens recebidas enquanto o chat está fechado. Mensagens próprias não aumentam o contador.
+- O chat, seus eventos e rascunhos são os mesmos do desktop. Girar a tela ou redimensionar a janela move os elementos existentes, sem criar outra conexão ou outra saída de áudio.
+- O painel acompanha a área visível quando o teclado abre, mantendo o zoom do navegador sob controle do usuário. Botões principais têm área de toque de pelo menos 44 px.
+- A tela inicial continua com apenas o card centralizado e o logo. Em computadores com janela ampla, permanecem os controles no cabeçalho e o chat ao lado do palco.
+
+`room-responsive.js` cuida apenas da apresentação. O menu e o chat usam os diálogos nativos, que mantêm as ações do painel em foco. Referências: [diálogo modal](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal) e [área visível no celular](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport).
+
+**Publicação:** envie o conteúdo da pasta `cloak-main` para a raiz do repositório. Inclua o novo `room-responsive.js`; o HTML e o cache usam `room-responsive.js?v=1`, `studio.css?v=6`, `studio.js?v=2` e `app.js?v=14`. O cache passa a `2026-09-18-responsive-1`.
+
+**Verificação:** 11 cenários automatizados de apresentação em `tests/responsive.test.cjs` verificam preservação dos botões e rascunhos, mensagens não lidas, abertura/fechamento, troca entre os layouts, saída da sala e tamanho do painel diante do teclado simulado. O DOM e os eventos de dispositivo são simulados; a renderização, o foco nativo e o teclado ainda devem ser conferidos em aparelhos reais. Os testes anteriores de conexão e áudio continuam em `tests/`. A execução completa de `node --test tests/*.test.cjs` passou nos 38 testes (15 de conexão, 12 de áudio e 11 de apresentação).
+
+
 ## Página inicial sem cabeçalho — 18/09/2026
 
 A página inicial exibe apenas `entry-card panel`, com o logo, centralizado horizontal e verticalmente na tela. O cabeçalho é exclusivo da sala para manter seus controles de voz, transmissão e saída. A entrada usa toda a altura da tela, com rolagem em telas pequenas. Esta entrega usa `studio.css?v=5` e o cache `2026-09-18-home-card-1`.

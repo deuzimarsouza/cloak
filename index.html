@@ -35,7 +35,7 @@
       href="./src/icons/apple-touch-icon.png"
     />
     <link rel="stylesheet" href="styles.css?v=14" />
-    <link rel="stylesheet" href="studio.css?v=5" />
+    <link rel="stylesheet" href="studio.css?v=6" />
     <link
       rel="preload"
       as="image"
@@ -56,6 +56,7 @@
     <script defer src="app.js?v=14"></script>
     <script defer src="pwa.js?v=1"></script>
     <script defer src="studio.js?v=2"></script>
+    <script defer src="room-responsive.js?v=1"></script>
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -389,10 +390,15 @@
 
               <section
                 class="room-chat panel room-chat-rail"
+                id="room-chat"
                 aria-labelledby="room-chat-title"
                 aria-describedby="room-chat-note"
               >
                 <header class="chat-header">
+                  <button class="mobile-chat-close" id="mobile-chat-close" type="button" aria-label="Fechar chat e voltar à sala">
+                    <svg class="studio-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+                    <span>Voltar</span>
+                  </button>
                   <div>
                     <p class="eyebrow">Canal de texto</p>
                     <h2 id="room-chat-title"><span aria-hidden="true">#</span> conversa</h2>
@@ -586,10 +592,17 @@
             </div>
           </div>
 
+          <button class="mobile-chat-button" id="mobile-chat-button" type="button" aria-label="Abrir chat de texto" aria-haspopup="dialog" aria-controls="mobile-chat-dialog" aria-expanded="false" hidden>
+            <svg class="studio-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z"/><path d="M7 9h10M7 13h7"/></svg>
+            <span>Chat</span>
+            <span class="chat-fab-badge" id="chat-unread-count" aria-hidden="true" hidden>0</span>
+          </button>
           <div id="remote-audio-container" hidden></div>
         </section>
       </main>
     </div>
+
+    <dialog class="mobile-chat-dialog" id="mobile-chat-dialog" aria-labelledby="room-chat-title" aria-describedby="room-chat-note"></dialog>
 
     <dialog class="studio-help-dialog" id="studio-help-dialog" aria-labelledby="studio-help-title">
       <div class="studio-help-heading"><p class="eyebrow">BEM-VINDO AO CLOAK</p><button type="button" id="studio-help-close" aria-label="Fechar ajuda">×</button></div>
@@ -609,9 +622,9 @@
         <div class="room-menu-header">
           <div>
             <p class="eyebrow">Detalhes da sala</p>
-            <h2 id="room-menu-title">Convite e entrada de áudio</h2>
+            <h2 id="room-menu-title">Menu da sala</h2>
             <p id="room-menu-description">
-              Gerencie o acesso, compartilhe a sala e escolha seu microfone.
+              Compartilhe o convite e ajuste sua chamada.
             </p>
           </div>
           <button
@@ -625,6 +638,10 @@
         </div>
 
         <div class="room-menu-body">
+          <section class="room-menu-call-controls" id="room-menu-call-controls" aria-labelledby="room-menu-controls-title" hidden>
+            <h3 id="room-menu-controls-title">Controles da chamada</h3>
+            <div id="room-controls-slot"></div>
+          </section>
           <section
             class="room-overview-grid"
             aria-label="Informações e configurações da sala"

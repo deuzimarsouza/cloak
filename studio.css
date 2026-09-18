@@ -400,3 +400,103 @@ body.room-active {
 .room-active .site-header.room-only { display: flex; }
 body:not(.room-active) .app-shell { grid-template-rows: minmax(0, 1fr); }
 .home-screen .home-grid { padding-block: max(24px, env(safe-area-inset-top), env(safe-area-inset-bottom)); }
+
+/* Compact rooms use the same controls in the hamburger menu and a modal chat. */
+.mobile-chat-button, .mobile-chat-close { display: none; }
+.mobile-chat-dialog:not([open]) { display: none; }
+.mobile-chat-dialog {
+  position: fixed;
+  inset: var(--chat-top, 0px) 0 auto auto;
+  width: min(100vw, 680px);
+  max-width: 100vw;
+  height: 100vh;
+  height: var(--chat-height, 100dvh);
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: #15131e;
+  box-shadow: -20px 0 80px #0006;
+}
+.mobile-chat-dialog[open] { display: grid; grid-template-rows: minmax(0, 1fr); }
+.mobile-chat-dialog::backdrop { background: #06070dcc; backdrop-filter: blur(5px); }
+.room-active .mobile-chat-dialog .room-chat {
+  display: grid;
+  grid-area: auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%; height: 100%; min-height: 0; min-width: 0;
+  margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none;
+}
+.room-active .mobile-chat-dialog .chat-header {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px;
+  height: auto; min-height: 78px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px max(16px, env(safe-area-inset-left));
+}
+.mobile-chat-dialog .chat-header > div { grid-column: 1; grid-row: 1; }
+.mobile-chat-dialog .chat-expiry { grid-column: 1; grid-row: 2; justify-self: start; margin: 0; }
+.mobile-chat-dialog .mobile-chat-close {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  grid-column: 2; grid-row: 1 / span 2; min-height: 44px; padding: 8px 12px;
+  border: 1px solid #4a3b5b; border-radius: 12px; background: #2c233b;
+  color: #dfcef3; font-size: 12px; font-weight: 650;
+}
+.room-active .mobile-chat-dialog .chat-header h2 { font-size: 18px; }
+.room-active .mobile-chat-dialog .chat-expiry { max-width: none; font-size: 10px; }
+.room-active .mobile-chat-dialog .chat-messages { padding: 20px max(18px, env(safe-area-inset-right)) 20px max(18px, env(safe-area-inset-left)); overflow-y: auto; overscroll-behavior: contain; }
+.room-active .mobile-chat-dialog .chat-message-bubble { font-size: 14px; }
+.room-active .mobile-chat-dialog .chat-message-meta { font-size: 11px; }
+.room-active .mobile-chat-dialog .chat-composer {
+  grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; padding: 6px;
+  margin: 0 max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.room-active .mobile-chat-dialog .chat-icon-button,
+.room-active .mobile-chat-dialog .chat-send-button { width: 44px; min-height: 44px; }
+.room-active .mobile-chat-dialog .chat-input-shell textarea { font-size: 16px; line-height: 1.4; }
+.room-active .mobile-chat-dialog .chat-input-meta { font-size: 10px; }
+.room-active .mobile-chat-dialog .emoji-picker { width: min(300px, calc(100vw - 40px)); max-height: min(240px, 40dvh); overflow-y: auto; }
+.room-active .mobile-chat-dialog .chat-new-messages { bottom: calc(96px + env(safe-area-inset-bottom)); min-height: 40px; }
+.room-menu-call-controls { margin: 0 0 18px; }
+.room-menu-call-controls h3 { margin: 0 0 12px; color: #bca9d2; font-size: 12px; font-weight: 650; }
+.room-active #room-controls-slot .room-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; margin: 0; padding: 0; gap: 10px; border: 0; border-radius: 0; background: none; }
+.room-active #room-controls-slot .control-button { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-width: 0; min-height: 54px; padding: 12px 14px; border: 1px solid #43364f; border-radius: 12px; font-size: 13px; }
+.room-active #room-controls-slot .control-button > span:last-child { display: inline; white-space: normal; }
+.room-active #room-controls-slot .control-button .control-icon { width: 22px; height: 22px; flex-shrink: 0; }
+.room-active #room-controls-slot .audio-unlock-button { position: static; inset: auto; grid-column: 1 / -1; width: 100%; min-width: 0; min-height: 48px; margin: 0; transform: none; font-size: 13px; }
+
+html.compact-room .room-active .app-shell { grid-template-rows: calc(64px + env(safe-area-inset-top)) minmax(0, 1fr); }
+html.compact-room .room-active .site-header { height: calc(64px + env(safe-area-inset-top)); padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); gap: 12px; }
+html.compact-room .room-active .site-header .brand { margin-right: auto; font-size: 23px; }
+html.compact-room .room-active .site-header .brand > span:last-child { display: inline; }
+html.compact-room .room-active .room-menu-button { width: 44px; height: 44px; margin-left: 0; }
+html.compact-room .room-active .site-header .install-app-button { display: none; }
+html.compact-room .room-active .room-screen { padding: 14px max(14px, env(safe-area-inset-right)) calc(86px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); overflow-y: auto; }
+html.compact-room .room-active .room-shell { height: 100%; min-height: 490px; grid-template-rows: auto minmax(0, 1fr); gap: 14px; }
+html.compact-room .room-active .room-layout,
+html.compact-room .room-active .room-layout.has-screen-share { height: 100%; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(240px, 1fr) 180px; grid-template-areas: 'screen' 'voice'; gap: 14px; overflow: visible; }
+html.compact-room .room-active .room-voice-column { height: 100%; min-height: 0; }
+html.compact-room .room-active .room-members-panel { grid-template-rows: 28px minmax(0, 1fr); }
+html.compact-room .room-active .room-voice-column .participants-grid { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 160px; grid-template-rows: 132px; grid-auto-rows: auto; overflow-x: auto; overflow-y: hidden; }
+html.compact-room .room-active .studio-lounge { padding: 38px 18px 20px; }
+html.compact-room .room-active .studio-lounge .button { min-height: 44px; }
+html.compact-room .room-active .screen-share-stage { height: 100%; min-height: 0; grid-column: auto; grid-row: auto; }
+html.compact-room .room-active .mobile-chat-button {
+  position: fixed; z-index: 60; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-width: 112px; min-height: 56px; padding: 14px 22px;
+  border: 1px solid #c8b2ff; border-radius: 19px; background: #b69afa; color: #21142f;
+  box-shadow: 0 8px 32px #0006, 0 0 24px #b499ff20; font-size: 14px; font-weight: 750;
+}
+.mobile-chat-button:hover { filter: brightness(1.06); }
+.mobile-chat-button:focus-visible, .mobile-chat-close:focus-visible { outline: 3px solid #e0d1ff; outline-offset: 3px; }
+.chat-fab-badge { position: absolute; top: -8px; right: -5px; display: grid; place-items: center; min-width: 24px; min-height: 24px; padding: 2px 6px; border: 2px solid #12111b; border-radius: 20px; background: #79ddc7; color: #102d25; font-size: 11px; }
+
+@media (max-width: 480px) {
+  html.compact-room .room-menu-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); border-radius: 20px; }
+  html.compact-room .room-menu-shell { max-height: calc(100dvh - 20px); }
+  html.compact-room .room-menu-header { padding: 16px; gap: 12px; }
+  html.compact-room .room-menu-body { padding: 14px; }
+  .room-active #room-controls-slot .control-button { gap: 8px; padding: 12px 10px; font-size: 12px; }
+}
