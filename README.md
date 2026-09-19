@@ -1,5 +1,21 @@
 # Cloak
 
+## Interface refinada e chat simplificado — 19/09/2026
+
+Esta versão reduz os textos repetidos e renova a apresentação com superfícies em grafite, detalhes em lavanda, bordas discretas e tipografia mais legível.
+
+- **Entrada:** apenas o card centralizado com logo, nome e convite por link ou código. As instruções dos campos continuam disponíveis para leitores de tela; erros e confirmações permanecem visíveis.
+- **Sala:** nome e estado de conexão em destaque, palco com menos texto e participantes com cartões mais discretos.
+- **Chat:** mensagens recebidas à esquerda e próprias à direita, balões com contraste melhor, autor e horário preservados, campo de envio compacto e ícones vetoriais. O contador aparece quando há texto no campo. A indicação de chat temporário continua visível.
+- **Celular e tablet:** botão flutuante de chat apenas com ícone e contador de mensagens; fechamento por ícone ×, Escape ou toque fora. Os controles da chamada permanecem no menu hambúrguer. Áreas de toque principais de 44 px ou mais.
+- **Notificações:** continuam no topo central da página.
+
+As alterações são de apresentação em `index.html` e `studio.css`. `app.js`, `screen-audio.js`, `room-responsive.js`, `studio.js`, `pwa.js`, o processador de voz e o PeerJS permanecem idênticos à versão anterior. A atualização do service worker muda apenas a versão do cache e a referência ao CSS: `studio.css?v=9`, cache `2026-09-19-refined-chat-1`.
+
+**Verificação:** os 38 testes existentes passaram (conexão, áudio de transmissão e comportamento responsivo em ambientes simulados). Foram conferidos os 140 IDs existentes, vínculos de acessibilidade, arquivos locais, sintaxe JavaScript e integridade do PeerJS. Esses testes não substituem a conferência visual em navegadores e aparelhos reais, que não foi executada nesta entrega. Nenhuma publicação no GitHub foi realizada.
+
+**Atualização:** publique o conteúdo da pasta `cloak-main`. Instruções em `ATUALIZAR.txt`.
+
 ## Notificações no topo central — 19/09/2026
 
 Os toasts ficam fixos no topo, centralizados na página, respeitando a área segura do dispositivo e as margens laterais. Esta entrega carrega `studio.css?v=8` e o cache `2026-09-19-toast-center-1`.
