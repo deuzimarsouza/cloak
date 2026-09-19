@@ -1,5 +1,9 @@
 # Cloak
 
+## Notificações no topo central — 19/09/2026
+
+Os toasts ficam fixos no topo, centralizados na página, respeitando a área segura do dispositivo e as margens laterais. Esta entrega carrega `studio.css?v=8` e o cache `2026-09-19-toast-center-1`.
+
 ## Controles somente com ícones — 19/09/2026
 
 Os botões Microfone, Voz, Tela e Sair agora exibem somente os ícones, com nomes acessíveis e dicas de ação. Os rótulos usados internamente pelo aplicativo ficam ocultos. Microfone ligado/desligado, efeito de voz ativo e transmissão em andamento mantêm indicadores visuais; a transmissão ativa também mostra o símbolo de parada. No menu compacto, os quatro controles ficam alinhados em uma única fileira.
