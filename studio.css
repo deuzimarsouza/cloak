@@ -500,3 +500,23 @@ html.compact-room .room-active .mobile-chat-button {
   html.compact-room .room-menu-body { padding: 14px; }
   .room-active #room-controls-slot .control-button { gap: 8px; padding: 12px 10px; font-size: 12px; }
 }
+
+/* Icon-only call controls: hidden labels keep existing app bindings intact. */
+.room-active #room-controls .control-button {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; min-width: 48px; min-height: 48px;
+  padding: 0; gap: 0; flex-shrink: 0; border: 1px solid #493a59; border-radius: 13px;
+}
+.room-active #room-controls .control-button .control-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+.room-active #room-controls .control-button:focus-visible { outline: 3px solid #d7bdff; outline-offset: 3px; }
+.room-active #room-controls #mute-button[data-microphone-state="on"] { background: #173a30; border-color: #4caa88; color: #a2edcb; }
+.room-active #room-controls #mute-button[data-microphone-state="off"] { background: #3b2330; border-color: #895265; color: #ffbfca; }
+.room-active #room-controls #voice-equalizer-button.has-active-effect { background: #3b2954; border-color: #af8bdc; }
+.room-active #room-controls #screen-share-button.is-sharing { background: #79ddc7; border-color: #a2f0df; color: #123a30; }
+.screen-share-stop { display: none; position: absolute; width: 6px; height: 6px; top: 2px; left: 5px; border-radius: 1px; background: currentColor; }
+.is-sharing .screen-share-stop { display: block; }
+.room-active #room-controls #leave-room-button { background: #512536; border-color: #a95770; color: #ffd0da; }
+.room-active #room-controls #leave-room-button:hover { background: #703046; }
+.room-active #room-controls .control-button[aria-busy="true"] { border-style: dashed; }
+.room-active #room-controls-slot .room-controls { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
+.room-active #room-controls-slot .control-button { width: 100%; height: 54px; min-width: 44px; min-height: 54px; padding: 0; gap: 0; justify-content: center; }

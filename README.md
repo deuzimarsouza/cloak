@@ -1,5 +1,11 @@
 # Cloak
 
+## Controles somente com ícones — 19/09/2026
+
+Os botões Microfone, Voz, Tela e Sair agora exibem somente os ícones, com nomes acessíveis e dicas de ação. Os rótulos usados internamente pelo aplicativo ficam ocultos. Microfone ligado/desligado, efeito de voz ativo e transmissão em andamento mantêm indicadores visuais; a transmissão ativa também mostra o símbolo de parada. No menu compacto, os quatro controles ficam alinhados em uma única fileira.
+
+Esta entrega carrega `studio.css?v=7`, `app.js?v=15` e o cache `2026-09-19-icon-controls-1`.
+
 ## Sala responsiva para celular e tablet — 18/09/2026
 
 - Em janelas de até 1100 px e dispositivos com toque como entrada principal, os controles de microfone, voz, tela, saída e ativação da mídia recebida ficam no menu hambúrguer existente.

@@ -5366,6 +5366,7 @@
       "aria-busy",
       String(microphoneBusy || state.restoring),
     );
+    dom.muteButton.title = dom.muteButton.getAttribute("aria-label");
     dom.muteButton.disabled = voiceBlocked || roomUnavailable || microphoneBusy;
   }
 

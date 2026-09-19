@@ -35,7 +35,7 @@
       href="./src/icons/apple-touch-icon.png"
     />
     <link rel="stylesheet" href="styles.css?v=14" />
-    <link rel="stylesheet" href="studio.css?v=6" />
+    <link rel="stylesheet" href="studio.css?v=7" />
     <link
       rel="preload"
       as="image"
@@ -53,7 +53,7 @@
       crossorigin="anonymous"
     ></script>
     <script defer src="screen-audio.js?v=1"></script>
-    <script defer src="app.js?v=14"></script>
+    <script defer src="app.js?v=15"></script>
     <script defer src="pwa.js?v=1"></script>
     <script defer src="studio.js?v=2"></script>
     <script defer src="room-responsive.js?v=1"></script>
@@ -99,7 +99,7 @@
           aria-label="Controles da chamada"
           hidden
         >
-          <button class="control-button" type="button" id="mute-button">
+          <button class="control-button" type="button" id="mute-button" aria-label="Ativar microfone" title="Ativar microfone">
             <span class="control-icon" aria-hidden="true">
               <img
                 class="control-icon-image"
@@ -110,13 +110,14 @@
                 height="22"
               />
             </span>
-            <span id="mute-button-label">Silenciar</span>
+            <span id="mute-button-label" hidden aria-hidden="true">Silenciar</span>
           </button>
           <button
             class="control-button voice-equalizer-trigger"
             type="button"
             id="voice-equalizer-button"
             aria-label="Abrir equalizador de voz, estilo Natural"
+            title="Equalizador: Natural"
             aria-haspopup="dialog"
             aria-controls="equalizer-dialog"
           >
@@ -130,27 +131,29 @@
               />
             </span>
             <span class="voice-effect-dot" aria-hidden="true"></span>
-            <span id="voice-equalizer-label">Voz</span>
+            <span id="voice-equalizer-label" hidden aria-hidden="true">Voz</span>
           </button>
           <button
             class="control-button screen-share-button"
             type="button"
             id="screen-share-button"
             aria-label="Compartilhar uma aba, janela ou tela"
+            title="Compartilhar uma aba, janela ou tela"
             aria-pressed="false"
             aria-haspopup="dialog"
             aria-controls="screen-share-dialog"
           >
             <span class="control-icon" aria-hidden="true">
-              <span class="screen-share-symbol"></span>
+              <span class="screen-share-symbol"><span class="screen-share-stop" aria-hidden="true"></span></span>
             </span>
-            <span id="screen-share-label">Tela</span>
+            <span id="screen-share-label" hidden aria-hidden="true">Tela</span>
           </button>
           <button
             class="control-button control-danger"
             type="button"
             id="leave-room-button"
             aria-label="Sair da sala"
+            title="Sair da sala"
           >
             <span class="control-icon" aria-hidden="true">
               <img
@@ -161,7 +164,7 @@
                 height="22"
               />
             </span>
-            <span>Sair</span>
+            <span hidden aria-hidden="true">Sair</span>
           </button>
           <button
             class="button audio-unlock-button"

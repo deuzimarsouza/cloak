@@ -1,11 +1,14 @@
-CLOAK — VERSÃO RESPONSIVA PARA CELULAR E TABLET — 18/09/2026
+CLOAK — CONTROLES COM ÍCONES — 19/09/2026
 
 PUBLICAR
-1. Extraia cloak-responsivo.zip e abra a pasta cloak-main.
+1. Extraia cloak-icones.zip e abra a pasta cloak-main.
 2. Envie o conteúdo dessa pasta para a raiz do repositório deuzimarsouza/cloak,
    substituindo os arquivos e mantendo as subpastas. Inclua room-responsive.js.
 3. Conclua o commit na branch main e aguarde a publicação na aba Actions.
 4. Feche todas as abas e janelas instaladas do Cloak e abra o site novamente.
+
+Os quatro controles da chamada mostram apenas ícones. Os nomes continuam
+disponíveis para leitores de tela e nas dicas ao passar o mouse.
 
 USAR NO CELULAR OU TABLET
 - Entre em uma sala e toque no menu hambúrguer no canto superior direito.
@@ -25,8 +28,8 @@ CONFERIR APÓS PUBLICAR
   ao cabeçalho. Navegadores antigos sem diálogo modal mantêm o layout anterior.
 
 VERSÕES
-studio.css?v=6; room-responsive.js?v=1; studio.js?v=2; app.js?v=14.
-Cache: 2026-09-18-responsive-1.
+studio.css?v=7; room-responsive.js?v=1; studio.js?v=2; app.js?v=15.
+Cache: 2026-09-19-icon-controls-1.
 
 Os testes de interação usam DOM e teclado simulados. Não houve teste em
 aparelhos físicos. O suporte à captura de tela depende do navegador.
