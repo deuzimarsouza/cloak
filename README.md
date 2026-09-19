@@ -1,5 +1,15 @@
 # Cloak
 
+## Uma notificação por vez, abaixo dos controles — 19/09/2026
+
+Os toasts continuam centralizados, agora a 96 px do topo mais a área segura do dispositivo, abaixo do cabeçalho. Uma nova notificação substitui imediatamente a anterior e cancela seu temporizador, inclusive durante a animação de saída. A mais recente recebe seu próprio tempo de exibição (3,8 segundos, seguido da saída), sem fila nem empilhamento.
+
+O ajuste em `app.js` está limitado à apresentação dos toasts. Os 41 testes passaram, incluindo três cenários novos para notificações rápidas e substituição durante a exibição ou saída. Testes com DOM e temporizadores simulados; sem validação visual em navegador nesta entrega. Versões: `studio.css?v=11`, `app.js?v=16`, cache `2026-09-19-single-toast-1`.
+
+## Campo de mensagem sem barra de rolagem — 19/09/2026
+
+A barra de rolagem de `chat-input` fica oculta no computador, tablet e celular. O crescimento automático até o limite existente e a navegação pelo texto longo permanecem disponíveis. A rolagem do histórico de mensagens não muda. Ajuste somente em CSS; JavaScript funcional preservado. `studio.css?v=10`, cache `2026-09-19-chat-input-1`.
+
 ## Interface refinada e chat simplificado — 19/09/2026
 
 Esta versão reduz os textos repetidos e renova a apresentação com superfícies em grafite, detalhes em lavanda, bordas discretas e tipografia mais legível.

@@ -328,6 +328,9 @@ body.room-active {
 .room-active .chat-send-button:disabled { background: #303342; color: #9295a9; opacity: 1; }
 .room-active .chat-icon-button:focus-visible, .room-active .chat-send-button:focus-visible { outline: 2px solid #c5b4ff; outline-offset: 2px; }
 .room-active .chat-input-shell textarea { min-height: 44px; font-size: 14px; line-height: 1.5; padding: 11px 5px; border-radius: 0; }
+/* Hide the input scrollbar while retaining access to long drafts. */
+#chat-input { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+#chat-input::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .room-active .chat-input-shell textarea::placeholder { color: #a3a6b9; }
 .room-active .chat-input-meta { padding: 0 5px 4px; color: #a5a8bb; font-size: 10px; font-variant-numeric: tabular-nums; }
 .room-active .chat-input-shell textarea:placeholder-shown + .chat-input-meta { display: none; }
@@ -631,10 +634,10 @@ html.compact-room .room-active .mobile-chat-button {
 .room-active #room-controls-slot .room-controls { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
 .room-active #room-controls-slot .control-button { width: 100%; height: 54px; min-width: 44px; min-height: 54px; padding: 0; gap: 0; justify-content: center; }
 
-/* Notifications remain centered at the top at every viewport width. */
+/* Center notifications below the header controls, including the safe area. */
 .toast { border-color: #3d3e4e; border-radius: 16px; background: #20222ef5; }
 .toast-region {
-  top: calc(16px + env(safe-area-inset-top));
+  top: calc(96px + env(safe-area-inset-top));
   right: auto;
   bottom: auto;
   left: 50%;

@@ -1,13 +1,18 @@
-CLOAK — INTERFACE REFINADA E CHAT SIMPLIFICADO — 19/09/2026
+CLOAK — NOTIFICAÇÃO ÚNICA ABAIXO DOS CONTROLES — 19/09/2026
 
 PUBLICAR
-1. Extraia cloak-design-refinado.zip e abra a pasta cloak-main.
+1. Extraia cloak-toast-unico.zip e abra a pasta cloak-main.
 2. Envie o conteúdo dessa pasta para a raiz do repositório deuzimarsouza/cloak,
    substituindo os arquivos e mantendo as subpastas.
 3. Conclua o commit na branch main e aguarde a publicação na aba Actions.
 4. Feche todas as abas e janelas instaladas do Cloak e abra o site novamente.
 
 O QUE MUDOU
+- Toast centralizado a 96 px do topo, mais a área segura do dispositivo.
+- Apenas uma notificação visível. A nova substitui a anterior e reinicia
+  o tempo de exibição, sem fila ou empilhamento.
+- Barra de rolagem do campo de mensagem oculta, preservando o crescimento
+  automático e a navegação pelo texto. O histórico continua com rolagem.
 - Menos texto na entrada, no palco e no cabeçalho do chat.
 - Tema grafite com detalhes em lavanda e tipografia mais legível.
 - Mensagens próprias à direita; recebidas à esquerda.
@@ -17,16 +22,17 @@ O QUE MUDOU
 - Notificações no topo central e controles da chamada no menu preservados.
 
 INTEGRIDADE
-O JavaScript de conexão, chat, voz, transmissão e layout responsivo permanece
-idêntico à versão anterior. Os 38 testes existentes passaram em ambientes
-simulados. IDs, vínculos de acessibilidade, arquivos e integridade do PeerJS
-foram conferidos. Não houve validação visual em navegador ou aparelho físico.
+O ajuste em app.js limita-se à apresentação e aos temporizadores dos toasts.
+A lógica de conexão, chat, voz, transmissão e layout responsivo foi preservada.
+Os 41 testes passaram em ambientes simulados, incluindo três cenários de
+substituição de notificações. Não houve validação visual em navegador ou
+aparelho físico.
 
 Após publicar, confira a entrada por link/código, as mensagens, o teclado
 no celular e a chamada entre dois dispositivos.
 
 VERSÕES
-studio.css?v=9; room-responsive.js?v=1; studio.js?v=2; app.js?v=15.
-Cache: 2026-09-19-refined-chat-1.
+studio.css?v=11; room-responsive.js?v=1; studio.js?v=2; app.js?v=16.
+Cache: 2026-09-19-single-toast-1.
 
 A publicação no GitHub não foi realizada por esta entrega.

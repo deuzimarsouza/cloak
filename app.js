@@ -6691,15 +6691,21 @@
     }
   }
 
+  let toastDismissTimer = null;
+
   function showToast(message, type = "info") {
+    window.clearTimeout(toastDismissTimer);
     const toast = document.createElement("div");
     toast.className = `toast${type === "error" ? " is-error" : ""}`;
     toast.textContent = message;
-    dom.toastRegion.appendChild(toast);
+    dom.toastRegion.replaceChildren(toast);
 
-    window.setTimeout(() => {
+    toastDismissTimer = window.setTimeout(() => {
       toast.classList.add("is-leaving");
-      window.setTimeout(() => toast.remove(), 220);
+      toastDismissTimer = window.setTimeout(() => {
+        toast.remove();
+        toastDismissTimer = null;
+      }, 220);
     }, 3800);
   }
 
